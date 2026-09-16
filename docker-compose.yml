@@ -1,0 +1,96 @@
+version: "3.9"
+
+# NexAgent — One-command local development stack
+# Usage: docker compose up -d
+# Then from backend/: npx prisma migrate dev --name init && npm run db:seed
+
+services:
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexagent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexagent
+      POSTGRES_PASSWORD: nexagent_pass
+      POSTGRES_DB: nexagent_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexagent -d nexagent_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── ChromaDB ──────────────────────────────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: nexagent-chromadb
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=none
+      - ALLOW_RESET=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── NexAgent Backend ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexagent-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DATABASE_URL: postgresql://nexagent:nexagent_pass@postgres:5432/nexagent_db?schema=public
+      JWT_SECRET: nexagent_super_secret_jwt_key_2026_ccep_eval
+      CCEP_THRESHOLD: "0.60"
+      MOCK_MODE: "false"
+      CHROMADB_URL: http://chromadb:8000
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-mock_gemini_key}
+      GROQ_API_KEY: ${GROQ_API_KEY:-mock_groq_key}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-NexAgent_Dev_2026!}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── NexAgent Frontend ─────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexagent-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  chroma_data:

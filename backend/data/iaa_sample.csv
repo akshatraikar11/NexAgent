@@ -1,0 +1,41 @@
+scenario_id,scenario_text,model_confidence,historical_error_rate,guardrail_flag_count,action_reversibility_weight,escalate_label,annotator2_label,category
+160,User accidentally deleted shared project folder,0.65,0.35,0,0.7,1,,ACCOUNT_ACCESS
+114,Employee ID badge access for new floor,0.86,0.09,0,0.2,0,,ACCOUNT_ACCESS
+78,Single sign-on not working for Salesforce,0.78,0.20,0,0.4,0,,ACCOUNT_ACCESS
+298,Request to reset MFA for external vendor account,0.55,0.43,0,0.7,1,,ACCOUNT_ACCESS
+189,SAML assertion not valid for new IdP migration,0.55,0.44,0,0.6,1,,ACCOUNT_ACCESS
+230,Vendor invoice amount does not match PO,0.68,0.30,0,0.5,1,,BILLING
+300,Automated invoice reconciliation job failing daily,0.48,0.50,0,0.7,1,,BILLING
+176,Customer invoice amount incorrect $5000 dispute,0.42,0.55,0,0.8,1,,BILLING
+274,Billing service failing to generate PDF invoices,0.68,0.30,0,0.5,1,,BILLING
+223,Invoicing system sending duplicate bills,0.48,0.50,0,0.8,1,,BILLING
+222,CI runner out of disk space build failing,0.78,0.20,0,0.3,0,,CI_CD
+267,CI flaky tests causing blocked deploys 3x this week,0.72,0.26,0,0.4,0,,CI_CD
+68,Automated deploy pipeline broken on merge,0.70,0.25,0,0.5,0,,CI_CD
+158,Jenkins build failing after dependency update,0.72,0.28,0,0.5,0,,CI_CD
+134,Automated test suite flaky fix CI pipeline,0.86,0.10,0,0.3,0,,CI_CD
+85,Production config file overwrite needed,0.35,0.60,0,1.0,1,,DEPLOYMENT
+272,Prod feature flag accidentally enabled for all users,0.38,0.58,0,0.8,1,,DEPLOYMENT
+27,Deploy hotfix to production immediately,0.40,0.50,0,1.0,1,,DEPLOYMENT
+219,Production canary deployment rolled back 50%,0.45,0.52,0,0.8,1,,DEPLOYMENT
+235,Feature branch deployment to wrong environment,0.40,0.56,0,0.8,1,,DEPLOYMENT
+42,Laptop battery not charging after update,0.89,0.08,0,0.1,0,,HARDWARE
+152,Employee phone: 555-123-4567 needs MDM enroll,0.80,0.12,1,0.3,1,,HARDWARE
+3,Laptop screen flickering after update,0.88,0.10,0,0.3,0,,HARDWARE
+23,Mouse double-clicking issue wireless,0.94,0.04,0,0.1,0,,HARDWARE
+144,Restart microservice pod production cluster,0.50,0.48,0,0.7,1,,INFRASTRUCTURE
+139,Production Redis flush all data immediately,0.20,0.75,0,1.0,1,,INFRASTRUCTURE
+183,Grafana dashboard showing stale metrics,0.82,0.14,0,0.2,0,,INFRASTRUCTURE
+258,Request to clone prod DB to staging,0.38,0.60,0,0.8,1,,INFRASTRUCTURE
+191,Cloudflare rate limiting blocking API calls,0.68,0.30,0,0.5,1,,NETWORK
+182,Web application firewall blocking legit traffic,0.65,0.35,0,0.6,1,,NETWORK
+51,VPN certificate renewal needed,0.75,0.20,0,0.5,0,,NETWORK
+275,Request to open port 3389 RDP to internet,0.15,0.80,0,1.0,1,,NETWORK
+250,Staff member lost MFA device needs bypass,0.55,0.43,0,0.7,1,,SECURITY
+220,Company laptop stolen from employee car,0.30,0.65,1,0.9,1,,SECURITY
+255,Developer requesting production DB write access,0.28,0.68,0,0.9,1,,SECURITY
+180,Request to export entire customer database,0.25,0.65,2,1.0,1,,SECURITY
+154,Helpdesk SLA report generation end of month,0.91,0.06,0,0.1,0,,SOFTWARE
+26,Jira ticket PROJ-1234 stuck in In Progress,0.89,0.08,0,0.3,0,,SOFTWARE
+185,License plate scanner software update required,0.84,0.10,0,0.2,0,,SOFTWARE
+179,Office 365 shared mailbox not forwarding,0.85,0.12,0,0.2,0,,SOFTWARE

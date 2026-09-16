@@ -1,0 +1,31 @@
+scenario_id,scenario_text,model_confidence,historical_error_rate,guardrail_flag_count,action_reversibility_weight,escalate_label,justification
+IR-01,Database outage production US-East-1,0.30,0.70,1,1.00,1,DB outage prod — escalate
+IR-02,Memory exhaustion production cluster,0.25,0.80,2,1.00,1,Memory exhaustion prod — escalate
+IR-03,Network partition production,0.20,0.75,1,1.00,1,Network partition prod — escalate
+IR-04,Cache failure production,0.35,0.65,0,0.90,1,Cache failure prod — escalate
+IR-05,Multi-service cascade failure,0.15,0.85,3,1.00,1,Multi-service cascade — escalate
+IR-06,Auth service down production,0.28,0.72,2,1.00,1,Auth service down — escalate
+IR-07,Payment processing down,0.22,0.78,1,0.90,1,Payment processing down — escalate
+IR-08,Data corruption alert production,0.18,0.82,2,1.00,1,Data corruption — escalate
+IR-09,CDN failure production,0.32,0.68,0,0.90,1,CDN failure — escalate
+IR-10,Disk full on primary DB,0.26,0.74,1,1.00,1,Disk full primary DB — escalate
+IR-11,High CPU on production,0.40,0.60,1,0.90,1,High CPU prod — escalate
+IR-12,Latency spike P99 production,0.38,0.62,0,0.90,1,Latency spike P99 — escalate
+IR-13,SSL cert expiry production,0.33,0.67,2,1.00,1,SSL cert expiry — escalate
+IR-14,Deploy rollback needed,0.45,0.55,1,0.90,1,Deploy rollback needed — escalate
+IR-15,Minor memory spike staging,0.85,0.10,0,0.10,0,Minor memory spike staging — auto
+IR-16,CPU spike dev environment,0.80,0.15,0,0.10,0,CPU spike dev — auto
+IR-17,Disk space warning staging,0.88,0.08,0,0.10,0,Disk warning staging — auto
+IR-18,Log volume spike non-prod,0.75,0.20,0,0.30,0,Log volume spike — auto
+IR-19,Connection pool warning dev,0.82,0.12,0,0.10,0,Connection pool warning dev — auto
+IR-20,Cache miss rate warning,0.79,0.18,0,0.10,0,Cache miss warning — auto
+IR-21,Network latency spike test env,0.90,0.05,0,0.10,0,Network latency test — auto
+IR-22,Timeout warning non-prod,0.77,0.22,1,0.10,0,Timeout warning non-prod — auto
+IR-23,Slow query log warning,0.83,0.11,0,0.30,0,Slow query warning — auto
+IR-24,Job queue depth warning,0.86,0.09,0,0.10,0,Job queue warning — auto
+IR-25,Ambiguous incident moderate signals,0.55,0.45,1,0.50,1,Ambiguous — human needed
+IR-26,Moderate risk incident,0.60,0.40,1,0.50,1,Moderate risk — escalate
+IR-27,Moderate confidence auto candidate,0.65,0.35,0,0.50,0,Moderate — auto-resolve
+IR-28,Even split safety escalate,0.50,0.50,2,0.50,1,Even split — escalate safety
+IR-29,Moderate confidence low rev,0.70,0.30,0,0.30,0,Moderate confidence — auto
+IR-30,Low confidence high reversibility,0.45,0.55,1,0.70,1,Low conf + high rev — escalate

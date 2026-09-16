@@ -1,0 +1,107 @@
+{
+  "title": "Guardrails Scanner Specification",
+  "version": "1.0.0",
+  "description": "Plain text and JSON regex pattern specification for PII, SQL Injection, and Prompt Injection detection in TypeScript/Node without requiring Python NER libraries.",
+  "normalization": {
+    "formula": "min(flagCount, 3) / 3",
+    "range": [0.0, 1.0],
+    "cap": 3
+  },
+  "categories": {
+    "PII": {
+      "description": "Personally Identifiable Information patterns",
+      "patterns": [
+        {
+          "name": "email",
+          "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+          "flags": "gi"
+        },
+        {
+          "name": "phone",
+          "regex": "(?:\\+?\\d{1,3}[-.\\s]?)?\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}",
+          "flags": "g"
+        },
+        {
+          "name": "ssn",
+          "regex": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+          "flags": "g"
+        },
+        {
+          "name": "credit_card",
+          "regex": "\\b(?:\\d[ -]*?){13,16}\\b",
+          "flags": "g"
+        },
+        {
+          "name": "api_key",
+          "regex": "(?:api[_-]?key|secret|token|password)\\s*[:=]\\s*['\"]?[a-zA-Z0-9_\\-]{16,}['\"]?",
+          "flags": "gi"
+        }
+      ]
+    },
+    "SQL_INJECTION": {
+      "description": "SQL Injection attempt patterns",
+      "patterns": [
+        {
+          "name": "drop_table",
+          "regex": "\\bDROP\\s+TABLE\\b",
+          "flags": "gi"
+        },
+        {
+          "name": "union_select",
+          "regex": "\\bUNION\\s+(?:ALL\\s+)?SELECT\\b",
+          "flags": "gi"
+        },
+        {
+          "name": "or_1_equals_1",
+          "regex": "\\bOR\\s+['\"]?1['\"]?\\s*=\\s*['\"]?1['\"]?\\b",
+          "flags": "gi"
+        },
+        {
+          "name": "delete_from",
+          "regex": "\\bDELETE\\s+FROM\\b",
+          "flags": "gi"
+        },
+        {
+          "name": "exec_cmd",
+          "regex": "\\bEXEC(?:UTE)?\\s*\\(",
+          "flags": "gi"
+        },
+        {
+          "name": "sql_comment",
+          "regex": "--|\\/\\*",
+          "flags": "g"
+        }
+      ]
+    },
+    "PROMPT_INJECTION": {
+      "description": "Prompt Injection / Jailbreak attempt patterns",
+      "patterns": [
+        {
+          "name": "ignore_previous",
+          "regex": "ignore\\s+(?:all\\s+)?previous\\s+instructions",
+          "flags": "gi"
+        },
+        {
+          "name": "disregard_above",
+          "regex": "disregard\\s+(?:the\\s+)?above\\s+instructions",
+          "flags": "gi"
+        },
+        {
+          "name": "system_prompt_reveal",
+          "regex": "(?:reveal|show|print|output)\\s+(?:the\\s+)?system\\s+prompt",
+          "flags": "gi"
+        },
+        {
+          "name": "jailbreak_dan",
+          "regex": "\\bDAN\\b|developer\\ mode|jailbreak",
+          "flags": "gi"
+        },
+        {
+          "name": "roleplay_override",
+          "regex": "you\\s+are\\s+now\\s+a\\s+unrestricted",
+          "flags": "gi"
+        }
+      ]
+    }
+  }
+}

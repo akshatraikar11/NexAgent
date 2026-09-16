@@ -1,0 +1,55 @@
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.test
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+**/node_modules/
+**/.pnp
+**/.pnp.js
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+**/dist/
+**/.next/
+**/out/
+**/.turbo/
+**/build/
+
+# ── TypeScript ────────────────────────────────────────────────────────────────
+**/*.tsbuildinfo
+**/tsconfig.tsbuildinfo
+
+# ── Python ────────────────────────────────────────────────────────────────────
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.venv/
+**/venv/
+
+# ── ML artifacts ──────────────────────────────────────────────────────────────
+backend/weights.json
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+**/*.log
+**/npm-debug.log*
+**/pnpm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+
+# ── Prisma ────────────────────────────────────────────────────────────────────
+# Keep migrations, ignore generated client (regenerated from schema)
+backend/node_modules/.prisma/
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+docker-compose.override.yml

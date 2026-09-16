@@ -1,0 +1,311 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+}
+
+enum PipelineType {
+  TICKET_TRIAGE
+  INCIDENT_RESPONSE
+  KB_SELF_LEARNING
+  CI_TRIAGE
+  BUILD_DEPLOY
+  MERGEGATE
+}
+
+enum PipelineStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum StepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum DecisionOutcome {
+  AUTO_RESOLVE
+  ESCALATE
+  PENDING
+}
+
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  passwordHash  String
+  name          String
+  role          Role            @default(OPERATOR)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  humanOverrides HumanOverride[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+}
+
+model Category {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  description     String?
+  totalDecisions  Int      @default(0)
+  overrideCount   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tickets         Ticket[]
+}
+
+model Ticket {
+  id          String   @id @default(uuid())
+  externalId  String   @unique
+  title       String
+  description String
+  categoryId  String
+  status      String   @default("OPEN")
+  priority    String   @default("MEDIUM")
+  source      String   @default("JIRA")
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  decisions   Decision[]
+  auditLogs   AuditLog[]
+  kbEntries   KBEntry[]
+  sla         TicketSLA?
+}
+
+model PipelineRun {
+  id          String         @id @default(uuid())
+  type        PipelineType
+  status      PipelineStatus @default(PENDING)
+  currentStep String?
+  context     Json           @default("{}")
+  error       String?
+  startedAt   DateTime       @default(now())
+  completedAt DateTime?
+
+  stepLogs    StepLog[]
+  decisions   Decision[]
+}
+
+model StepLog {
+  id            String     @id @default(uuid())
+  pipelineRunId String
+  stepName      String
+  status        StepStatus @default(PENDING)
+  input         Json?
+  output        Json?
+  error         String?
+  retryCount    Int        @default(0)
+  startedAt     DateTime   @default(now())
+  completedAt   DateTime?
+
+  pipelineRun   PipelineRun @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+}
+
+model Decision {
+  id                       String          @id @default(uuid())
+  ticketId                 String?
+  pipelineRunId            String
+  ccepScore                Float
+  threshold                Float
+  decision                 DecisionOutcome
+  modelConfidence          Float
+  dualModelAgreed          Boolean         @default(true)
+  historicalErrorRate      Float
+  guardrailFlagsCount      Int             @default(0)
+  normalizedGuardrailScore Float           @default(0)
+  actionReversibilityWeight Float          @default(0)
+  signalBreakdown          Json
+  createdAt                DateTime        @default(now())
+
+  ticket                   Ticket?        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  pipelineRun              PipelineRun    @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+  humanOverrides           HumanOverride[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([ticketId])
+  @@index([decision])
+}
+
+model HumanOverride {
+  id                String          @id @default(uuid())
+  decisionId        String
+  operatorId        String?
+  originalDecision  DecisionOutcome
+  overriddenDecision DecisionOutcome
+  reason            String
+  overriddenAt      DateTime        @default(now())
+
+  decision          Decision        @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  operator          User?           @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  ticketId   String?
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  timestamp  DateTime @default(now())
+
+  ticket     Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([timestamp(sort: Desc)])
+  @@index([actorId])
+}
+
+model KBEntry {
+  id                    String   @id @default(uuid())
+  sourceTicketId        String?
+  content               String
+  embeddingId           String   @unique
+  confidenceAtIngestion Float
+  timesReused           Int      @default(0)
+  isOverridden          Boolean  @default(false)
+  ingestedAt            DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  sourceTicket          Ticket?  @relation(fields: [sourceTicketId], references: [id], onDelete: SetNull)
+}
+
+model Settings {
+  id                        String   @id @default("singleton")
+  ccepThreshold             Float    @default(0.60)
+  reversibilityMap          Json     @default("{\"slack_notification\":0.1,\"jira_comment\":0.3,\"status_change\":0.5,\"auto_merge_pr\":0.9,\"prod_deploy\":1.0}")
+  weights                   Json     @default("{\"w1\":0.35,\"w2\":0.25,\"w3\":0.20,\"w4\":0.20}")
+  updatedAt                 DateTime @updatedAt
+}
+
+model WeightHistory {
+  id        String   @id @default(uuid())
+  w1        Float
+  w2        Float
+  w3        Float
+  w4        Float
+  source    String   @default("manual") // "manual" | "fit_weights"
+  createdAt DateTime @default(now())
+}
+
+// ── SLA tracking ─────────────────────────────────────────────────────────────
+// Priority → SLA hours: P1=1, P2=4, P3=8, P4=24
+// slaBreachAt is computed at ticket creation based on priority
+model SLAPolicy {
+  id           String @id @default(uuid())
+  priority     String @unique   // "P1" | "P2" | "P3" | "P4" | "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+  slaHours     Float
+  description  String?
+
+  @@map("sla_policies")
+}
+
+// ── Alert Correlation ─────────────────────────────────────────────────────────
+// Groups related incidents together to reduce noise (like PagerDuty alert grouping)
+model AlertGroup {
+  id           String   @id @default(uuid())
+  title        String                         // e.g. "Database connectivity cluster"
+  rootCause    String?                        // LLM-inferred root cause
+  severity     String   @default("P2")       // highest severity in group
+  status       String   @default("OPEN")     // OPEN | RESOLVED
+  alertIds     String[]                       // list of Sentry/Jira alert IDs
+  keywords     String[]                       // extracted keyword tokens for matching
+  memberCount  Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  members      AlertGroupMember[]
+
+  @@map("alert_groups")
+}
+
+model AlertGroupMember {
+  id           String     @id @default(uuid())
+  groupId      String
+  alertId      String                         // external alert ID
+  alertTitle   String
+  source       String     @default("SENTRY")  // SENTRY | JIRA | GITHUB
+  joinedAt     DateTime   @default(now())
+
+  group        AlertGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@map("alert_group_members")
+}
+
+// ── Notification Center ───────────────────────────────────────────────────────
+// In-app notifications (like ServiceNow's notification panel)
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String?                        // null = broadcast to all operators
+  type        String                         // ESCALATION | SLA_BREACH | OVERRIDE | KB_INGESTED | SYSTEM
+  title       String
+  body        String
+  severity    String   @default("INFO")     // INFO | WARNING | CRITICAL
+  entityType  String?                        // Decision | Ticket | PipelineRun
+  entityId    String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  readAt      DateTime?
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ── Test / Build run history (flakiness + transience scoring) ─────────────────
+// kind='test'  → used by CI Triage to compute flip-rate flakiness
+// kind='build' → used by Build/Deploy to compute transience (auto-retry success %)
+enum RunHistoryKind {
+  test
+  build
+}
+
+model TestRunHistory {
+  id        String         @id @default(uuid())
+  testName  String                             // test name OR "{workflow}:{environment}" for builds
+  branch    String
+  passed    Boolean
+  kind      RunHistoryKind @default(test)
+  runAt     DateTime       @default(now())
+
+  @@index([testName])
+  @@index([testName, kind])
+  @@map("test_run_history")
+}
+
+// ── SLA breach tracking on tickets ────────────────────────────────────────────
+// Attach SLA deadline directly to a ticket; synced with SLAPolicy at creation
+model TicketSLA {
+  id           String    @id @default(uuid())
+  ticketId     String    @unique
+  priority     String
+  slaHours     Float
+  slaBreachAt  DateTime
+  breached     Boolean   @default(false)
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  ticket       Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([slaBreachAt])
+  @@map("ticket_slas")
+}
