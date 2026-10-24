@@ -27,11 +27,26 @@ export interface StepState {
   data?: unknown;
 }
 
+export interface LiveHostTelemetry {
+  executed: boolean;
+  platform: string;
+  actionsTaken: string[];
+  serviceStatus: string;
+  dnsFlushed: boolean;
+  gatewayPing: boolean;
+  commandLogs: string[];
+  summary: string;
+  durationMs: number;
+}
+
 export interface PipelineResult {
   runId: string;
   decision: string;
   ccepScore: number;
+  threshold?: number;
+  isMockLLM?: boolean;
   status: string;
+  liveHostTelemetry?: LiveHostTelemetry;
 }
 
 export function usePipeline() {
@@ -71,11 +86,17 @@ export function usePipeline() {
       try {
         const run = await api.pipelines.get(runId);
         if (run.status === "COMPLETED" || run.status === "FAILED") {
+          const runAny = run as unknown as {
+            decision: string;
+            ccepScore: number;
+            liveHostTelemetry?: LiveHostTelemetry;
+          };
           setResult({
             runId,
-            decision: (run as unknown as { decision: string }).decision ?? "PENDING",
-            ccepScore: (run as unknown as { ccepScore: number }).ccepScore ?? 0,
+            decision: runAny.decision ?? "PENDING",
+            ccepScore: runAny.ccepScore ?? 0,
             status: run.status,
+            liveHostTelemetry: runAny.liveHostTelemetry,
           });
           setStreaming(false);
         } else {
@@ -116,7 +137,12 @@ export function usePipeline() {
       es.addEventListener("pipeline-update", (e: MessageEvent) => {
         const evt: SSEEvent = JSON.parse(e.data as string);
         const ts = new Date(evt.timestamp).toLocaleTimeString();
-        setRawLog((prev) => [...prev, `[${ts}] ${evt.stepName} → ${evt.status}`]);
+        const customLog = (evt.data as { log?: string } | undefined)?.log;
+        if (customLog) {
+          setRawLog((prev) => [...prev, `[${ts}] ${customLog}`]);
+        } else {
+          setRawLog((prev) => [...prev, `[${ts}] ${evt.stepName} → ${evt.status}`]);
+        }
 
         if (evt.status === "STARTED") {
           stepTimers.current[evt.stepName] = Date.now();
@@ -137,6 +163,25 @@ export function usePipeline() {
               s.stepName === evt.stepName ? { ...s, status: evt.status, latencyMs, data: evt.data } : s
             )
           );
+        }
+
+        if (evt.stepName === "pipeline" && evt.status === "COMPLETED") {
+          const payload = evt.data as {
+            decision?: string;
+            ccepScore?: number;
+            liveHostTelemetry?: LiveHostTelemetry;
+          } | undefined;
+          setResult({
+            runId,
+            decision: payload?.decision ?? "AUTO_RESOLVE",
+            ccepScore: payload?.ccepScore ?? 0,
+            status: "COMPLETED",
+            liveHostTelemetry: payload?.liveHostTelemetry,
+          });
+          setStreaming(false);
+          es.close();
+          esRef.current = null;
+          return;
         }
       });
 

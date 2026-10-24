@@ -27,20 +27,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const t = localStorage.getItem("nexagent_token");
-    if (t) {
-      setTokenState(t);
-      api.auth
-        .me()
-        .then((u) => setUser(u))
-        .catch(() => {
-          clearToken();
-          setTokenState(null);
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    // Check session via httpOnly cookie on mount
+    api.auth
+      .me()
+      .then((u) => {
+        setUser(u);
+      })
+      .catch(() => {
+        clearToken();
+        setTokenState(null);
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -57,7 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+      // Ignore network errors on logout
+    }
     clearToken();
     setTokenState(null);
     setUser(null);

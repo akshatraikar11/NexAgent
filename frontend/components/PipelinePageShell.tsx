@@ -103,7 +103,14 @@ export function PipelinePageShell({ title, icon, description, controls, buildPay
                       <div className="flex items-center gap-2.5">
                         <div className={`w-2 h-2 rounded-full ${cfg.dotColor} ${s.status === "STARTED" ? "glow-pulse" : ""}`} style={{ color: s.status === "STARTED" ? "#3b82f6" : undefined }} />
                         <div>
-                          <p className="text-sm font-mono font-medium text-foreground">{s.stepName}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-mono font-medium text-foreground">{s.stepName}</p>
+                            {(s.stepName === "generate_response" || s.stepName === "generate_plan" || s.stepName === "dual_llm_consensus" || s.stepName === "analyze_logs") && (
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                MOCK LLM
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-muted-foreground">{new Date(s.timestamp).toLocaleTimeString()}</p>
                         </div>
                       </div>
@@ -144,22 +151,41 @@ export function PipelinePageShell({ title, icon, description, controls, buildPay
                   <Badge variant={result.status === "COMPLETED" ? "success" : "destructive"}>{result.status}</Badge>
                 </div>
                 <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">LLM Source</span>
+                  {result.isMockLLM !== false ? (
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      MOCK FIXTURE
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      LIVE GEMINI
+                    </span>
+                  )}
+                </div>
+                <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Run ID</span>
                   <span className="text-xs font-mono text-muted-foreground">{result.runId.slice(0, 18)}…</span>
                 </div>
-                {/* Visual score bar */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>CCEP Score</span><span>Threshold 0.60</span>
-                  </div>
-                  <div className="h-2.5 bg-secondary rounded-full overflow-hidden relative">
-                    <div
-                      className={`h-full rounded-full score-bar-fill ${result.decision === "ESCALATE" ? "bg-gradient-to-r from-amber-400 to-amber-500" : "bg-gradient-to-r from-emerald-400 to-emerald-500"}`}
-                      style={{ width: `${Math.min(result.ccepScore * 100, 100)}%` }}
-                    />
-                    <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/30" style={{ left: "60%" }} />
-                  </div>
-                </div>
+                  {/* Visual score bar */}
+                  {(() => {
+                    const activeThreshold = result.threshold ?? 0.34;
+                    return (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>CCEP Score</span><span>Threshold {activeThreshold.toFixed(2)}</span>
+                        </div>
+                        <div className="h-2.5 bg-secondary rounded-full overflow-hidden relative">
+                          <div
+                            className={`h-full rounded-full score-bar-fill ${result.decision === "ESCALATE" ? "bg-gradient-to-r from-amber-400 to-amber-500" : "bg-gradient-to-r from-emerald-400 to-emerald-500"}`}
+                            style={{ width: `${Math.min(result.ccepScore * 100, 100)}%` }}
+                          />
+                          <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/30" style={{ left: `${Math.min(activeThreshold * 100, 100)}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
               </div>
             ) : streaming ? (
               <div className="space-y-2.5">

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -54,14 +54,6 @@ export default function LoginPage() {
             <h2 className="text-2xl font-bold text-foreground font-display">Welcome back</h2>
             <p className="text-sm text-muted-foreground mt-1">Sign in to NexAgent CCEP Platform</p>
           </div>
-        </div>
-
-        {/* Default credentials hint */}
-        <div className="flex items-start gap-2 bg-primary/6 border border-primary/15 rounded-xl px-3 py-2.5">
-          <Sparkles size={13} className="text-primary mt-0.5 shrink-0" />
-          <p className="text-xs text-primary/80">
-            Default: <span className="font-mono font-semibold">admin@nexagent.dev</span> / <span className="font-mono font-semibold">NexAgent_Dev_2026!</span>
-          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

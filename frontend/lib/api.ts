@@ -1,22 +1,30 @@
 /**
  * api.ts — NexAgent frontend API client
  * All data comes from the live Phase 1 backend at NEXT_PUBLIC_API_URL.
- * No mock data. JWT is stored in localStorage under key "nexagent_token".
+ * No mock data. Authentication is handled via secure httpOnly cookies
+ * and in-memory tokens to protect against XSS token theft.
  */
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
+let inMemoryToken: string | null = null;
+
 function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("nexagent_token");
+  return inMemoryToken;
 }
 
 export function setToken(token: string) {
-  localStorage.setItem("nexagent_token", token);
+  inMemoryToken = token;
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("nexagent_token"); // Remove any legacy token from localStorage
+  }
 }
 
 export function clearToken() {
-  localStorage.removeItem("nexagent_token");
+  inMemoryToken = null;
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("nexagent_token");
+  }
 }
 
 async function request<T>(
@@ -30,7 +38,11 @@ async function request<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: "include", // Send httpOnly session cookies automatically
+  });
 
   if (!res.ok) {
     const body = await res.text();
@@ -52,6 +64,8 @@ export const api = {
         "/auth/register",
         { method: "POST", body: JSON.stringify({ email, password, name }) }
       ),
+    logout: () =>
+      request<{ success: boolean }>("/auth/logout", { method: "POST" }),
     me: () =>
       request<{ id: string; email: string; name: string; role: string; createdAt: string }>(
         "/auth/me"

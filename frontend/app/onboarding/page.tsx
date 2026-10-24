@@ -25,7 +25,7 @@ const DEFAULT_CATEGORIES = [
   { name: "DEPLOYMENT",     description: "Release failures, rollback, configuration errors" },
 ];
 
-const DEFAULT_CCEP = { threshold: 0.60, w1: 0.2524, w2: 0.2106, w3: 0.2138, w4: 0.3232 };
+const DEFAULT_CCEP = { threshold: 0.34, w1: 0.2562, w2: 0.2260, w3: 0.1677, w4: 0.3502 };
 
 export default function OnboardingPage() {
   const router = useRouter();

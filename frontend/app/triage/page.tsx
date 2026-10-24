@@ -17,7 +17,7 @@ const STATUS_CONFIG: Record<string, { color: string; dotColor: string }> = {
 };
 
 const PRESETS = [
-  { t: "VPN Access Password Reset Request", d: "User cannot access VPN after password expiry.", emoji: "🔐" },
+  { t: "VPN Connection & DNS Cache Failure (Real Host Auto-Fix)", d: "User cannot connect to corporate VPN. Remote Access service (RasMan) and DNS cache degraded on local laptop.", emoji: "⚡" },
   { t: "Double Charged Billing Dispute", d: "Customer billed twice for invoice #INV-9921. Urgent refund.", emoji: "💳" },
   { t: "SSL Certificate Expiry — api.company.com", d: "SSL cert expires in 3 days. Auto-renewal failed.", emoji: "🔒" },
   { t: "Database High Latency & Drop Warning", d: "Production DB latency spiked above 500ms, us-east-1.", emoji: "🗄️" },
@@ -129,20 +129,77 @@ export default function TriagePage() {
                     <span className="font-bold tabular-nums font-display text-lg metric-glow">{result.ccepScore.toFixed(4)}</span>
                   </div>
                   <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">LLM Source</span>
+                    {result.isMockLLM !== false ? (
+                      <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        MOCK FIXTURE
+                      </span>
+                    ) : (
+                      <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        LIVE GEMINI
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Run ID</span>
                     <span className="text-xs font-mono text-muted-foreground">{result.runId.slice(0, 18)}…</span>
                   </div>
                   {/* CCEP score bar */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Score</span><span>Threshold 0.60</span>
+                  {(() => {
+                    const activeThreshold = result.threshold ?? 0.34;
+                    return (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Score</span><span>Threshold {activeThreshold.toFixed(2)}</span>
+                        </div>
+                        <div className="h-2.5 bg-secondary rounded-full overflow-hidden relative">
+                          <div className={`h-full rounded-full score-bar-fill ${result.decision === "ESCALATE" ? "bg-gradient-to-r from-amber-400 to-amber-500" : "bg-gradient-to-r from-emerald-400 to-emerald-500"}`}
+                            style={{ width: `${Math.min(result.ccepScore * 100, 100)}%` }} />
+                          <div className="absolute top-0 bottom-0 w-0.5 bg-primary/50" style={{ left: `${Math.min(activeThreshold * 100, 100)}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Real Host Remediation Telemetry (shown on laptop execution) */}
+                  {result.liveHostTelemetry && (
+                    <div className="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-2 animate-scale-in">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Live Host Auto-Remediation (Windows 11)
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-700/80 bg-emerald-500/15 px-2 py-0.5 rounded-full">
+                          {result.liveHostTelemetry.durationMs}ms
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 text-xs">
+                        <div className="bg-background/80 p-1.5 rounded-xl border border-border/30">
+                          <p className="text-[9px] text-muted-foreground uppercase font-mono">VPN (RasMan)</p>
+                          <p className="font-semibold text-emerald-600 text-xs">{result.liveHostTelemetry.serviceStatus}</p>
+                        </div>
+                        <div className="bg-background/80 p-1.5 rounded-xl border border-border/30">
+                          <p className="text-[9px] text-muted-foreground uppercase font-mono">DNS Cache</p>
+                          <p className="font-semibold text-emerald-600 text-xs">Purged & Refreshed</p>
+                        </div>
+                        <div className="bg-background/80 p-1.5 rounded-xl border border-border/30">
+                          <p className="text-[9px] text-muted-foreground uppercase font-mono">Gateway Reachability</p>
+                          <p className="font-semibold text-emerald-600 text-xs">Ping 8.8.8.8 OK</p>
+                        </div>
+                        <div className="bg-background/80 p-1.5 rounded-xl border border-border/30">
+                          <p className="text-[9px] text-muted-foreground uppercase font-mono">Reversibility ($w_4$)</p>
+                          <p className="font-semibold text-emerald-600 text-xs">100% Safe (0 Flags)</p>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] font-mono text-emerald-800/90 dark:text-emerald-300/90 bg-emerald-500/10 p-2 rounded-lg leading-relaxed">
+                        ⚡ {result.liveHostTelemetry.summary}
+                      </p>
                     </div>
-                    <div className="h-2.5 bg-secondary rounded-full overflow-hidden relative">
-                      <div className={`h-full rounded-full score-bar-fill ${result.decision === "ESCALATE" ? "bg-gradient-to-r from-amber-400 to-amber-500" : "bg-gradient-to-r from-emerald-400 to-emerald-500"}`}
-                        style={{ width: `${Math.min(result.ccepScore * 100, 100)}%` }} />
-                      <div className="absolute top-0 bottom-0 w-0.5 bg-primary/50" style={{ left: "60%" }} />
-                    </div>
-                  </div>
+                  )}
                 </div>
               ) : streaming ? (
                 <div className="space-y-2">

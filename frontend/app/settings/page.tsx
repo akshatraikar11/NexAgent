@@ -17,7 +17,7 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
 
   // Form state
-  const [threshold, setThreshold] = useState("0.60");
+  const [threshold, setThreshold] = useState("0.34");
   const [w1, setW1] = useState("0.35");
   const [w2, setW2] = useState("0.25");
   const [w3, setW3] = useState("0.20");
