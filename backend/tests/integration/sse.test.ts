@@ -5,7 +5,9 @@ import { PipelineContext } from '../../src/orchestrator/types.js';
 import { sseManager, SSEEventData } from '../../src/sse/manager.js';
 
 describe('SSE Streaming Engine - Concurrent Load Test (≥5 Runs)', () => {
-  it('Executes 5 concurrent pipeline runs with 0 dropped events and strict per-ticket ordering', async () => {
+  // Timeout raised to 60s: 5 concurrent triage pipelines, some trigger real host remediation
+  // (JIRA-101 is a VPN ticket → PowerShell DNS/RasMan commands per run).
+  it('Executes 5 concurrent pipeline runs with 0 dropped events and strict per-ticket ordering', { timeout: 60000 }, async () => {
     const runCount = 5;
     const receivedEventsByRun: Map<string, SSEEventData[]> = new Map();
 
@@ -77,7 +79,7 @@ describe('SSE Streaming Engine - Concurrent Load Test (≥5 Runs)', () => {
 
       // Verify that step completion order matches expected sequence
       const completedSteps = events!
-        .filter((e) => e.status === 'COMPLETED')
+        .filter((e) => e.status === 'COMPLETED' && e.stepName !== 'pipeline')
         .map((e) => e.stepName);
 
       expect(completedSteps).toEqual(expectedStepOrder);

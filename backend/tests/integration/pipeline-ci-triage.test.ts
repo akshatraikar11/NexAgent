@@ -1,9 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { runPipeline } from '../../src/orchestrator/runner.js';
 import { CI_TRIAGE_STEPS } from '../../src/pipelines/ci-triage.pipeline.js';
 import { PipelineContext } from '../../src/orchestrator/types.js';
+import { prisma } from '../../src/db/client.js';
 
 describe('Stretch Pipeline 4: CI Test Triage End-to-End Test', () => {
+  beforeEach(async () => {
+    try {
+      await prisma.testRunHistory.deleteMany({ where: { kind: 'test' } });
+    } catch (_) {}
+  });
+
+  afterEach(async () => {
+    try {
+      await prisma.decision.deleteMany({ where: { pipelineRunId: { in: ['ci-triage-run-401', 'ci-triage-run-402'] } } });
+      await prisma.stepLog.deleteMany({ where: { pipelineRunId: { in: ['ci-triage-run-401', 'ci-triage-run-402'] } } });
+      await prisma.pipelineRun.deleteMany({ where: { id: { in: ['ci-triage-run-401', 'ci-triage-run-402'] } } });
+      await prisma.testRunHistory.deleteMany({ where: { kind: 'test' } });
+    } catch (_) {}
+  });
+
   it('Flaky test (RUN-1002) → AUTO_RESOLVE (retry)', async () => {
     const initialContext: PipelineContext = {
       runId: 'ci-triage-run-401',
@@ -26,6 +42,14 @@ describe('Stretch Pipeline 4: CI Test Triage End-to-End Test', () => {
       metadata: { ciRunId: 'RUN-1002' },
       actionType: 'status_change',
     };
+
+    try {
+      await prisma.pipelineRun.upsert({
+        where: { id: initialContext.runId },
+        update: { status: 'PENDING' },
+        create: { id: initialContext.runId, type: 'CI_TRIAGE', status: 'PENDING' },
+      });
+    } catch (_) {}
 
     const finalCtx = await runPipeline(CI_TRIAGE_STEPS, initialContext, { backoffBaseMs: 1 });
 
@@ -63,6 +87,14 @@ describe('Stretch Pipeline 4: CI Test Triage End-to-End Test', () => {
       metadata: { ciRunId: 'RUN-1001' },
       actionType: 'status_change',
     };
+
+    try {
+      await prisma.pipelineRun.upsert({
+        where: { id: initialContext.runId },
+        update: { status: 'PENDING' },
+        create: { id: initialContext.runId, type: 'CI_TRIAGE', status: 'PENDING' },
+      });
+    } catch (_) {}
 
     const finalCtx = await runPipeline(CI_TRIAGE_STEPS, initialContext, { backoffBaseMs: 1 });
 

@@ -1,0 +1,152 @@
+[
+  {
+    "company": "Allegro",
+    "incident_summary": "E-commerce site went down after a sudden traffic spike caused by a marketing campaign. The outage was caused by a configuration error in cluster resource management which prevented more service instances from starting even though hardware resources were available.",
+    "raw": "[Allegro](https://allegro.tech/2018/08/postmortem-why-allegro-went-down.html). E-commerce site went down after a sudden traffic spike caused by a marketing campaign. The outage was caused by a configuration error in cluster resource management which prevented more service instances from starting even though hardware resources were available."
+  },
+  {
+    "company": "Amazon",
+    "incident_summary": "A configuration change in the Seoul region incorrectly removed the setting that specifies the minimum healthy hosts for the EC2 DNS resolver fleet, so the system fell back to a very low default. The fleet's healthy host count dropped and in-VPC DNS queries from EC2 instances failed for ~84 minutes until capacity was manually restored. AWS added semantic config validation and per-hour throttling on host removal as remediations.",
+    "raw": "[Amazon](https://aws.amazon.com/message/74876-2/). A configuration change in the Seoul region incorrectly removed the setting that specifies the minimum healthy hosts for the EC2 DNS resolver fleet, so the system fell back to a very low default. The fleet's healthy host count dropped and in-VPC DNS queries from EC2 instances failed for ~84 minutes until capacity was manually restored. AWS added semantic config validation and per-hour throttling on host removal as remediations."
+  },
+  {
+    "company": "CircleCI",
+    "incident_summary": "A deploy changed the type of a field in the PostgreSQL database used by the job-distribution service. Newly-written rows used the new type and old rows used the old type, so the distributor's strict schema validation failed on each scan and it stopped distributing work. Rolling back made the rows written between the two deploys unreadable, so distribution kept failing; recovery required hand-deploying a build that ignored the offending field, plus manual scaling.",
+    "raw": "[CircleCI](https://discuss.circleci.com/t/incident-report-november-8-2021-jobs-stuck-in-a-not-running-state/41890). A deploy changed the type of a field in the PostgreSQL database used by the job-distribution service. Newly-written rows used the new type and old rows used the old type, so the distributor's strict schema validation failed on each scan and it stopped distributing work. Rolling back made the rows written between the two deploys unreadable, so distribution kept failing; recovery required hand-deploying a build that ignored the offending field, plus manual scaling."
+  },
+  {
+    "company": "CircleCI",
+    "incident_summary": "An IAM-role gap permitted out-of-band changes to AWS WAF outside of CircleCI's Terraform pipeline; an operator performing what they believed were read-only investigation actions modified WAF in a way that began blocking legitimate traffic to the `api.circleci.com` and `circleci.com` CloudFront distributions. Because the change wasn't recorded in Terraform, responders deprioritized WAF as a suspect and chased CORS errors and recent deploys until automated drift detection surfaced the discrepancy.",
+    "raw": "[CircleCI](https://discuss.circleci.com/t/post-incident-report-april-4-2025-circleci-ui-loading-build-triggering-issues/53208). An IAM-role gap permitted out-of-band changes to AWS WAF outside of CircleCI's Terraform pipeline; an operator performing what they believed were read-only investigation actions modified WAF in a way that began blocking legitimate traffic to the `api.circleci.com` and `circleci.com` CloudFront distributions. Because the change wasn't recorded in Terraform, responders deprioritized WAF as a suspect and chased CORS errors and recent deploys until automated drift detection surfaced the discrepancy."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "A bad config (router rule) caused all of their edge routers to crash, taking down all of Cloudflare.",
+    "raw": "[Cloudflare](https://web.archive.org/web/20211006135542/https://blog.cloudflare.com/todays-outage-post-mortem-82515/). A bad config (router rule) caused all of their edge routers to crash, taking down all of Cloudflare."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "During a maintenance of their private backbone network, an engineer made a typo in the Atlanta datacenter network configuration, causing all traffic coming from America and Europe flowing to this only datacenter, crushing it.",
+    "raw": "[Cloudflare](https://web.archive.org/web/20211016040522/https://blog.cloudflare.com/cloudflare-outage-on-july-17-2020/). During a maintenance of their private backbone network, an engineer made a typo in the Atlanta datacenter network configuration, causing all traffic coming from America and Europe flowing to this only datacenter, crushing it."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "An incorrect ordering of the disabled BGP advertised prefixes caused malfunction on 19 datacenters.",
+    "raw": "[Cloudflare](https://web.archive.org/web/20220621124002/https://blog.cloudflare.com/cloudflare-outage-on-june-21-2022/). An incorrect ordering of the disabled BGP advertised prefixes caused malfunction on 19 datacenters."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "A change to our Tiered Cache system caused some requests to fail for users with status code 530. The impact lasted for almost six hours in total. We estimate that about 5% of all requests failed at peak. Because of the complexity of our system and a blind spot in our tests, we did not spot this when the change was released to our test environment.",
+    "raw": "[Cloudflare](https://web.archive.org/web/20221112015610/https://blog.cloudflare.com/partial-cloudflare-outage-on-october-25-2022/). A change to our Tiered Cache system caused some requests to fail for users with status code 530. The impact lasted for almost six hours in total. We estimate that about 5% of all requests failed at peak. Because of the complexity of our system and a blind spot in our tests, we did not spot this when the change was released to our test environment."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "Several Cloudflare services became unavailable for 121 minutes on January 24, 2023 due to an error releasing code that manages service tokens. The incident degraded a wide range of Cloudflare products including aspects of our Workers platform, our Zero Trust solution, and control plane functions in our content delivery network (CDN).",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/cloudflare-incident-on-january-24th-2023/). Several Cloudflare services became unavailable for 121 minutes on January 24, 2023 due to an error releasing code that manages service tokens. The incident degraded a wide range of Cloudflare products including aspects of our Workers platform, our Zero Trust solution, and control plane functions in our content delivery network (CDN)."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "On 4 October 2023, Cloudflare experienced DNS resolution problems starting at 07:00 UTC and ending at 11:00 UTC. Some users of 1.1.1.1 or products like WARP, Zero Trust, or third party DNS resolvers which use 1.1.1.1 may have received SERVFAIL DNS responses to valid queries. We\u2019re very sorry for this outage. This outage was an internal software error and not the result of an attack. In this blog, we\u2019re going to talk about what the failure was, why it occurred, and what we\u2019re doing to make sure this doesn\u2019t happen again.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/1-1-1-1-lookup-failures-on-october-4th-2023/). On 4 October 2023, Cloudflare experienced DNS resolution problems starting at 07:00 UTC and ending at 11:00 UTC. Some users of 1.1.1.1 or products like WARP, Zero Trust, or third party DNS resolvers which use 1.1.1.1 may have received SERVFAIL DNS responses to valid queries. We\u2019re very sorry for this outage. This outage was an internal software error and not the result of an attack. In this blog, we\u2019re going to talk about what the failure was, why it occurred, and what we\u2019re doing to make sure this doesn\u2019t happen again."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "On 18 Nov. 2025, a change in permissions in a database in Cloudflare's bot-detection systems caused a file to be output that exceeded the limits of the software that runs that system. That file was propagated througout Cloudflare's network, causing a systemwide outage.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/18-november-2025-outage/). On 18 Nov. 2025, a change in permissions in a database in Cloudflare's bot-detection systems caused a file to be output that exceeded the limits of the software that runs that system. That file was propagated througout Cloudflare's network, causing a systemwide outage."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "A configuration change to disable an internal WAF testing tool propagated globally without a gradual rollout, triggering a Lua exception in the proxy's rulesets module that caused HTTP 500 errors for customers using the Cloudflare Managed Ruleset.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/5-december-2025-outage/). A configuration change to disable an internal WAF testing tool propagated globally without a gradual rollout, triggering a Lua exception in the proxy's rulesets module that caused HTTP 500 errors for customers using the Cloudflare Managed Ruleset."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "A bug in an automated cleanup task queried the Addressing API incorrectly, causing the system to interpret all BYOIP prefixes as pending deletion and systematically remove them.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/cloudflare-outage-february-20-2026/). A bug in an automated cleanup task queried the Addressing API incorrectly, causing the system to interpret all BYOIP prefixes as pending deletion and systematically remove them."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "Human error during abuse remediation inadvertently disabled the R2 Gateway service instead of a specific endpoint, due to insufficient validation safeguards in admin tooling.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/cloudflare-incident-on-february-6-2025/). Human error during abuse remediation inadvertently disabled the R2 Gateway service instead of a specific endpoint, due to insufficient validation safeguards in admin tooling."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "During credential rotation, the R2 engineering team accidentally deployed new storage credentials to the default environment instead of production by omitting the --env production flag, causing the R2 Gateway to fail authentication once old credentials were removed.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/cloudflare-incident-march-21-2025/). During credential rotation, the R2 engineering team accidentally deployed new storage credentials to the default environment instead of production by omitting the --env production flag, causing the R2 Gateway to fail authentication once old credentials were removed."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "A newly deployed DDoS mitigation rule exposed a latent bug in the rate-limiting system where flawed cookie validation logic caused HTTP request handler processes to enter infinite loops consuming 100% CPU, propagating across data centers.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/cloudflare-incident-on-june-20-2024/). A newly deployed DDoS mitigation rule exposed a latent bug in the rate-limiting system where flawed cookie validation logic caused HTTP request handler processes to enter infinite loops consuming 100% CPU, propagating across data centers."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "A deployment tool bug caused the production environment to reference a staging build version, routing traffic to an unauthorized endpoint returning HTTP 401 errors, cascading failures across Workers KV, Pages, Access, and Turnstile.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/cloudflare-incident-on-october-30-2023/). A deployment tool bug caused the production environment to reference a staging build version, routing traffic to an unauthorized endpoint returning HTTP 401 errors, cascading failures across Workers KV, Pages, Access, and Turnstile."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "A React component bug in the dashboard caused excessive API calls to the Tenant Service due to an improperly configured dependency array, overwhelming the system and cascading into broader API and dashboard failures.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/deep-dive-into-cloudflares-sept-12-dashboard-and-api-outage/). A React component bug in the dashboard caused excessive API calls to the Tenant Service due to an improperly configured dependency array, overwhelming the system and cascading into broader API and dashboard failures."
+  },
+  {
+    "company": "Cloudflare",
+    "incident_summary": "An automated routing policy configuration error removed prefix list filters from BGP export policies in Cloudflare's Miami router, causing it to advertise internal IPv6 prefixes to external peers and resulting in a route leak lasting 25 minutes.",
+    "raw": "[Cloudflare](https://blog.cloudflare.com/route-leak-incident-january-22-2026/). An automated routing policy configuration error removed prefix list filters from BGP export policies in Cloudflare's Miami router, causing it to advertise internal IPv6 prefixes to external peers and resulting in a route leak lasting 25 minutes."
+  },
+  {
+    "company": "Datadog",
+    "incident_summary": "A bad service discovery config in one of the clients brought down service discovery globally when a dependent client went down.",
+    "raw": "[Datadog](https://www.datadoghq.com/blog/2020-09-25-infrastructure-connectivity-issue/). A bad service discovery config in one of the clients brought down service discovery globally when a dependent client went down."
+  },
+  {
+    "company": "Enom",
+    "incident_summary": "On January 15, 2022, at 9:00 AM ET, Tucows\u2019 engineering team began planned maintenance work to migrate the Enom platform to a new cloud infrastructure. Due to the complexity of the cutover, the team encountered many issues resulting in continuous delays. The maintenance window was extended multiple times to address issues related to data replication, network routing, and DNS resolution issues impacting website accessibility and email delivery.",
+    "raw": "[Enom](https://enomstatus.com/incidents/03q064h6rb7x). On January 15, 2022, at 9:00 AM ET, Tucows\u2019 engineering team began planned maintenance work to migrate the Enom platform to a new cloud infrastructure. Due to the complexity of the cutover, the team encountered many issues resulting in continuous delays. The maintenance window was extended multiple times to address issues related to data replication, network routing, and DNS resolution issues impacting website accessibility and email delivery."
+  },
+  {
+    "company": "Etsy",
+    "incident_summary": "Sending multicast traffic without properly configuring switches caused an Etsy global outage.",
+    "raw": "[Etsy](https://web.archive.org/web/20211201033341/https://codeascraft.com/2012/01/23/solr-bittorrent-index-replication/). Sending multicast traffic without properly configuring switches caused an Etsy global outage."
+  },
+  {
+    "company": "Facebook",
+    "incident_summary": "Configuration changes to Facebook's backbone routers caused a global outage of all Facebook properties and internal tools.",
+    "raw": "[Facebook](https://engineering.fb.com/2021/10/05/networking-traffic/outage-details/). Configuration changes to Facebook's backbone routers caused a global outage of all Facebook properties and internal tools."
+  },
+  {
+    "company": "Facebook",
+    "incident_summary": "A bad config took down both Facebook and Instagram.",
+    "raw": "[Facebook](https://blog.thousandeyes.com/facebook-outage-deep-dive/). A bad config took down both Facebook and Instagram."
+  },
+  {
+    "company": "Firefox",
+    "incident_summary": "On January 13th, 2022, a specific code path in Firefox's network stack triggered a problem in the HTTP/3 protocol implementation. This blocked network communication and made Firefox unresponsive, unable to load web content for nearly two hours.",
+    "raw": "[Firefox](https://web.archive.org/web/20250314111052/https://hacks.mozilla.org/2022/02/retrospective-and-technical-details-on-the-recent-firefox-outage/). On January 13th, 2022, a specific code path in Firefox's network stack triggered a problem in the HTTP/3 protocol implementation. This blocked network communication and made Firefox unresponsive, unable to load web content for nearly two hours."
+  },
+  {
+    "company": "GitHub",
+    "incident_summary": "A Puppet manifest bug restarted only the authoritative nameserver (not the caching one) after an IP change, causing query timeouts. The deploy run during incident response then rebuilt the zone file from an internal provisioning API call that itself depended on DNS, producing a corrupt zone with `NXDOMAIN` for many records. Memory exhaustion from spawned processes on the fileservers extended impact to 1h35m of partial downtime.",
+    "raw": "[GitHub](https://github.blog/news-insights/the-library/dns-outage-post-mortem/). A Puppet manifest bug restarted only the authoritative nameserver (not the caching one) after an IP change, causing query timeouts. The deploy run during incident response then rebuilt the zone file from an internal provisioning API call that itself depended on DNS, producing a corrupt zone with `NXDOMAIN` for many records. Memory exhaustion from spawned processes on the fileservers extended impact to 1h35m of partial downtime."
+  },
+  {
+    "company": "GitHub",
+    "incident_summary": "A configuration change rolled out to GitHub.com databases broke the way hosts answered routing-service health-check pings, so the production read-only endpoint was marked unhealthy and inaccessible. With reads broken, the entire site was down for read operations for 36 minutes until the change was reverted.",
+    "raw": "[GitHub](https://github.blog/news-insights/company-news/github-availability-report-august-2024/). A configuration change rolled out to GitHub.com databases broke the way hosts answered routing-service health-check pings, so the production read-only endpoint was marked unhealthy and inaccessible. With reads broken, the entire site was down for read operations for 36 minutes until the change was reverted."
+  },
+  {
+    "company": "GitHub",
+    "incident_summary": "A telemetry gap caused security policies to be auto-applied to backend storage accounts in GitHub's underlying compute provider, blocking access to critical VM metadata. All VM create/delete/reimage operations failed, taking out Actions hosted runners in every region, Codespaces, Copilot coding agent, CodeQL, Dependabot, GitHub Enterprise Importer, and Pages for ~5h53m.",
+    "raw": "[GitHub](https://github.blog/news-insights/company-news/github-availability-report-february-2026/). A telemetry gap caused security policies to be auto-applied to backend storage accounts in GitHub's underlying compute provider, blocking access to critical VM metadata. All VM create/delete/reimage operations failed, taking out Actions hosted runners in every region, Codespaces, Copilot coding agent, CodeQL, Dependabot, GitHub Enterprise Importer, and Pages for ~5h53m."
+  },
+  {
+    "company": "GoCardless",
+    "incident_summary": "A bad config combined with an uncommon set of failures led to an outage of a database cluster, taking the API and Dashboard offline.",
+    "raw": "[GoCardless](https://gocardless.com/blog/incident-review-api-and-dashboard-outage-on-10th-october/). A bad config combined with an uncommon set of failures led to an outage of a database cluster, taking the API and Dashboard offline."
+  },
+  {
+    "company": "Google",
+    "incident_summary": "Initial GCVE provisioning was performed with a legacy option, which lead to a 'fixed term' contract with automatic deletion at the end of that period.",
+    "raw": "[Google](https://cloud.google.com/blog/products/infrastructure/details-of-google-cloud-gcve-incident). Initial GCVE provisioning was performed with a legacy option, which lead to a 'fixed term' contract with automatic deletion at the end of that period."
+  }
+]

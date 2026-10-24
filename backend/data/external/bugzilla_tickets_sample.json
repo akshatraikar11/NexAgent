@@ -1,0 +1,162 @@
+[
+  {
+    "resolution": "INVALID",
+    "priority": "P2",
+    "component": "Build Config",
+    "id": 36,
+    "status": "RESOLVED",
+    "summary": "Floating Point Exception on Execution"
+  },
+  {
+    "component": "XFE",
+    "resolution": "FIXED",
+    "id": 102,
+    "priority": "P2",
+    "status": "RESOLVED",
+    "summary": "Alt-w doesn''t close view-source window"
+  },
+  {
+    "summary": "Closing last window sometimes doesn''t kill process",
+    "status": "RESOLVED",
+    "resolution": "FIXED",
+    "component": "XFE",
+    "priority": "P2",
+    "id": 176
+  },
+  {
+    "summary": "showDocument(\"javascript:...\"); broken",
+    "status": "RESOLVED",
+    "component": "DOM: Core & HTML",
+    "id": 213,
+    "resolution": "FIXED",
+    "priority": "P5"
+  },
+  {
+    "id": 229,
+    "component": "Layout",
+    "status": "RESOLVED",
+    "summary": "HTML comments are not closed in the right place",
+    "priority": "P3",
+    "resolution": "FIXED"
+  },
+  {
+    "resolution": "FIXED",
+    "priority": "P2",
+    "component": "XFE",
+    "id": 242,
+    "status": "RESOLVED",
+    "summary": "Unix Aurora \"search\" and \"site tools\" don't do anything"
+  },
+  {
+    "id": 248,
+    "component": "NetLib",
+    "status": "RESOLVED",
+    "summary": "Proxy server access does not work",
+    "priority": "P3",
+    "resolution": "FIXED"
+  },
+  {
+    "priority": "P3",
+    "resolution": "FIXED",
+    "id": 255,
+    "component": "Other",
+    "summary": "Voicemail with Beatnik plugin, cannot play voicemail message.",
+    "status": "RESOLVED"
+  },
+  {
+    "id": 269,
+    "component": "Compositor Library",
+    "summary": "ns/module/rdf/ht.c ? 1755 line",
+    "status": "RESOLVED",
+    "priority": "P3",
+    "resolution": "FIXED"
+  },
+  {
+    "status": "RESOLVED",
+    "summary": "Hardcoded strings in navbar.cpp",
+    "priority": "P3",
+    "id": 276,
+    "resolution": "FIXED",
+    "component": "Windows FE"
+  },
+  {
+    "status": "RESOLVED",
+    "summary": "Version Checking regarding uuid2.dll",
+    "id": 280,
+    "priority": "P3",
+    "component": "Windows FE",
+    "resolution": "FIXED"
+  },
+  {
+    "id": 283,
+    "component": "NSPR",
+    "status": "RESOLVED",
+    "summary": "SINIX: Assertion Failure in uxwrap.c",
+    "priority": "P3",
+    "resolution": "FIXED"
+  },
+  {
+    "resolution": "FIXED",
+    "priority": "P3",
+    "status": "RESOLVED",
+    "summary": "Crash on PageDown",
+    "component": "Windows FE",
+    "id": 290
+  },
+  {
+    "resolution": "FIXED",
+    "priority": "P3",
+    "status": "RESOLVED",
+    "summary": "PR_ExplodeTime() works only if given a PRTime argument between year 1901-2099",
+    "component": "NSPR",
+    "id": 350
+  },
+  {
+    "summary": "test -1",
+    "status": "RESOLVED",
+    "component": "Bugzilla-General",
+    "id": 357,
+    "resolution": "INVALID",
+    "priority": "P3"
+  },
+  {
+    "resolution": "FIXED",
+    "priority": "P3",
+    "component": "Layout",
+    "id": 373,
+    "status": "RESOLVED",
+    "summary": "\"Edit | Select All\" crashes application"
+  },
+  {
+    "status": "RESOLVED",
+    "summary": "test case -2",
+    "priority": "P3",
+    "id": 375,
+    "component": "Aurora/RDF FE",
+    "resolution": "FIXED"
+  },
+  {
+    "priority": "P3",
+    "resolution": "WONTFIX",
+    "id": 465,
+    "component": "Networking: FTP",
+    "status": "RESOLVED",
+    "summary": "FTP PORT (active) command support"
+  },
+  {
+    "priority": "P4",
+    "resolution": "FIXED",
+    "id": 540,
+    "component": "Creating/Changing Bugs",
+    "status": "RESOLVED",
+    "summary": "Need feature to edit long description/comments"
+  },
+  {
+    "id": 541,
+    "component": "Bugzilla-General",
+    "status": "RESOLVED",
+    "summary": "Sorting the initial query by \"assignee\" doesn't work.",
+    "priority": "P2",
+    "resolution": "FIXED"
+  }
+]

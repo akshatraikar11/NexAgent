@@ -102,4 +102,46 @@ describe('CCEP Scorer Engine - Pure TypeScript Arithmetic Verification', () => {
 
     expect(result.decision).toBe('ESCALATE');
   });
+
+  // Item 7: NaN / out-of-range rejection
+  it('throws on NaN modelConfidence — prevents silent wrong decisions', () => {
+    expect(() =>
+      computeCCEPScore(
+        { modelConfidence: NaN, historicalErrorRate: 0.1, guardrailFlagCount: 0, actionReversibilityWeight: 0.3 },
+        BOOTSTRAP_DEFAULT_WEIGHTS
+      )
+    ).toThrow('[CCEP] Invalid signal: modelConfidence=NaN');
+  });
+
+  it('throws on Infinity historicalErrorRate', () => {
+    expect(() =>
+      computeCCEPScore(
+        { modelConfidence: 0.8, historicalErrorRate: Infinity, guardrailFlagCount: 0, actionReversibilityWeight: 0.3 },
+        BOOTSTRAP_DEFAULT_WEIGHTS
+      )
+    ).toThrow('[CCEP] Invalid signal: historicalErrorRate=Infinity');
+  });
+
+  it('throws on NaN threshold', () => {
+    expect(() =>
+      computeCCEPScore(
+        { modelConfidence: 0.8, historicalErrorRate: 0.1, guardrailFlagCount: 0, actionReversibilityWeight: 0.3 },
+        BOOTSTRAP_DEFAULT_WEIGHTS,
+        NaN
+      )
+    ).toThrow('[CCEP] Invalid threshold: NaN');
+  });
+
+  it('clamps out-of-range but valid inputs without throwing', () => {
+    // Values outside [0,1] are clamped, not rejected — caller may pass slightly out-of-range floats
+    const result = computeCCEPScore(
+      { modelConfidence: 1.5, historicalErrorRate: -0.2, guardrailFlagCount: 10, actionReversibilityWeight: 2.0 },
+      BOOTSTRAP_DEFAULT_WEIGHTS
+    );
+    // After clamping: conf→1.0, err→0.0, flags→min(10,3)/3=1.0, rev→1.0
+    // Score = 0.35*(1-1.0) + 0.25*0.0 + 0.20*1.0 + 0.20*1.0 = 0.40
+    // Default threshold is 0.32, so 0.40 >= 0.32 → ESCALATE
+    expect(result.ccepScore).toBeCloseTo(0.40, 3);
+    expect(result.decision).toBe('ESCALATE'); // 0.40 >= 0.32
+  });
 });

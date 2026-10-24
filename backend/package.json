@@ -18,7 +18,9 @@
     "eval:orchestrator": "tsx scripts/eval_orchestrator_vs_naive.ts",
     "eval:kb": "tsx scripts/eval_kb_impact.ts",
     "eval:all": "python fit_weights.py && tsx scripts/eval_orchestrator_vs_naive.ts && tsx scripts/eval_kb_impact.ts",
-    "demo": "tsx scripts/demo_all_workflows.ts"
+    "demo": "tsx scripts/demo_all_workflows.ts",
+    "demo:feedback": "tsx scripts/demo_feedback_loop.ts",
+    "demo:flip": "tsx scripts/demo_decision_flip.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

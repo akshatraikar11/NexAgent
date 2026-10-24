@@ -13,7 +13,7 @@ import { scanGuardrails } from '../../src/guardrails/scanner.js';
 import { MOCK_PR_DIFFS, MOCK_DIFF_DEFAULT } from '../../src/mcp/mock-data/github.mock.js';
 
 describe('Diff-based guardrail scanning (MergeGate Fix 2)', () => {
-  it('flags hardcoded API key and password patterns in PR-99 diff', () => {
+  it('flags hardcoded API key and token patterns in PR-99 diff', () => {
     const result = scanGuardrails(MOCK_PR_DIFFS['PR-99']);
 
     expect(result.flagCount).toBeGreaterThanOrEqual(2);

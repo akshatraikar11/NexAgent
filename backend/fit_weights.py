@@ -20,6 +20,9 @@ import random
 import sys
 from collections import Counter
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 # ---------------------------------------------------------------------------
 # Seed — fixed for reproducibility
 # ---------------------------------------------------------------------------
@@ -60,8 +63,18 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 # CCEP formula — mirrors TypeScript scorer exactly
 # score = w1*(1-conf) + w2*err + w3*min(flags,3)/3 + w4*rev
 # ---------------------------------------------------------------------------
-THRESHOLD = 0.60
+DEFAULT_THRESHOLD = 0.60  # Legacy default; overridden by threshold sweep
 BOOTSTRAP_N = 1000  # resamples per metric (vectorized — fast)
+
+# ---------------------------------------------------------------------------
+# Safety target — defined BEFORE looking at results (methodology requirement)
+# ---------------------------------------------------------------------------
+# "Keep missed-escalation rate (false auto-resolves on the ESCALATE class)
+#  under 10%, while keeping unnecessary escalations tolerable."
+# Missed-escalation rate = FN / (FN + TP) = 1 - recall_escalate
+# So target: recall_escalate >= 0.90
+TARGET_ESCALATE_RECALL = 0.90
+MAX_ACCEPTABLE_MISSED_ESCALATION_RATE = 0.10
 
 
 def ccep_score(row, w1, w2, w3, w4):
@@ -96,7 +109,7 @@ def run_formula_unit_tests():
         score = round(
             w1 * (1 - conf) + w2 * err + w3 * norm_flags + w4 * rev, 4
         )
-        decision = "ESCALATE" if score >= THRESHOLD else "AUTO_RESOLVE"
+        decision = "ESCALATE" if score >= DEFAULT_THRESHOLD else "AUTO_RESOLVE"
         status = "PASS" if abs(score - expected) < 1e-3 and decision == expected_dec else "FAIL"
         if status == "FAIL":
             all_passed = False
@@ -142,13 +155,13 @@ def split_dataset(rows):
     )
     y = np.array([int(r["escalate_label"]) for r in rows])
 
-    # Use explicit split column if available
+    # Use explicit split column if available and well-formed (has both classes and sufficient test rows)
     has_split_col = "split" in rows[0]
-    if has_split_col and any(r.get("split", "") in ("train", "val", "test") for r in rows):
+    explicit_test = [i for i, r in enumerate(rows) if r.get("split", "") == "test"]
+    if has_split_col and len(explicit_test) >= 30 and len(set(y[explicit_test])) > 1:
         train_idx = [i for i, r in enumerate(rows) if r.get("split", "") == "train"]
         val_idx   = [i for i, r in enumerate(rows) if r.get("split", "") == "val"]
-        test_idx  = [i for i, r in enumerate(rows) if r.get("split", "") == "test"]
-        # Any untagged rows go to train
+        test_idx  = explicit_test
         untagged  = [i for i, r in enumerate(rows) if r.get("split", "") not in ("train", "val", "test")]
         train_idx = train_idx + untagged
         print(f"[SPLIT] Using explicit 'split' column: train={len(train_idx)}, val={len(val_idx)}, test={len(test_idx)}")
@@ -158,11 +171,11 @@ def split_dataset(rows):
         sss1 = SSS(n_splits=1, test_size=0.30, random_state=RANDOM_SEED)
         tr_idx, tmp_idx = next(sss1.split(X, y))
         sss2 = SSS(n_splits=1, test_size=0.50, random_state=RANDOM_SEED)
-        val_idx, test_idx = next(sss2.split(X[tmp_idx], y[tmp_idx]))
-        val_idx  = tmp_idx[val_idx]
-        test_idx = tmp_idx[test_idx]
+        val_sub, test_sub = next(sss2.split(X[tmp_idx], y[tmp_idx]))
+        val_idx  = tmp_idx[val_sub]
+        test_idx = tmp_idx[test_sub]
         train_idx = tr_idx
-        print(f"[SPLIT] Random 70/15/15: train={len(train_idx)}, val={len(val_idx)}, test={len(test_idx)}")
+        print(f"[SPLIT] Stratified 70/15/15: train={len(train_idx)}, val={len(val_idx)}, test={len(test_idx)}")
 
     train_idx = np.array(train_idx)
     val_idx   = np.array(val_idx)
@@ -186,7 +199,7 @@ def split_dataset(rows):
     print(f"[SPLIT] Val   balance: AUTO={val_counter[0]},   ESCALATE={val_counter[1]}")
     print(f"[SPLIT] Test  balance: AUTO={test_counter[0]},  ESCALATE={test_counter[1]}")
 
-    return X_train, X_val, X_test, y_train, y_val, y_test, train_counter, val_counter, test_counter
+    return X_train, X_val, X_test, y_train, y_val, y_test, train_counter, val_counter, test_counter, train_idx, val_idx, test_idx
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +272,7 @@ def never_escalate(X, _w=None):
     return np.zeros(len(X), dtype=int)
 
 
-def fixed_threshold_predict(rows_test, threshold=THRESHOLD):
+def fixed_threshold_predict(rows_test, threshold=DEFAULT_THRESHOLD):
     w1, w2, w3, w4 = 0.35, 0.25, 0.20, 0.20
     preds = []
     for row in rows_test:
@@ -316,12 +329,115 @@ def extract_weights(model, X_train, y_train, X_train_n):
 # ---------------------------------------------------------------------------
 # Fitted CCEP prediction on test rows using fitted weights
 # ---------------------------------------------------------------------------
-def fitted_ccep_predict(rows_test, w1, w2, w3, w4, threshold=THRESHOLD):
+def fitted_ccep_predict(rows_test, w1, w2, w3, w4, threshold=DEFAULT_THRESHOLD):
     preds = []
     for row in rows_test:
         score = ccep_score(row, w1, w2, w3, w4)
         preds.append(1 if score >= threshold else 0)
     return np.array(preds)
+
+
+# ---------------------------------------------------------------------------
+# Threshold sweep — TUNED ON TRAIN+VAL ONLY, reported on held-out test
+# ---------------------------------------------------------------------------
+def sweep_threshold(train_rows, val_rows, w1, w2, w3, w4, test_rows=None):
+    """Sweep thresholds on train+val to find the one meeting the safety target.
+
+    Target (defined before looking at results):
+      missed-escalation rate ≤ 10%  (i.e. recall_escalate ≥ 0.90)
+      among thresholds meeting target, pick the one with the widest boundary
+      margin (distance to the nearest wrong-side tuning row), tie-broken by the
+      higher threshold. See the selection-rule comment below for the rationale.
+
+    Returns: (best_threshold, sweep_results_list)
+    """
+    tuning_rows = train_rows + val_rows
+    y_tuning = np.array([int(r["escalate_label"]) for r in tuning_rows])
+
+    # ── Item 2 assertion: sweep set and test set must share zero scenario_ids ──
+    if test_rows is not None:
+        tuning_ids = set(r["scenario_id"] for r in tuning_rows)
+        test_ids   = set(r["scenario_id"] for r in test_rows)
+        overlap    = tuning_ids & test_ids
+        print(f"[SWEEP-ASSERT] Sweep tuning set size: {len(tuning_ids)}")
+        print(f"[SWEEP-ASSERT] Eval test set size:    {len(test_ids)}")
+        print(f"[SWEEP-ASSERT] Overlap (must be 0):   {len(overlap)}")
+        assert len(overlap) == 0, (
+            f"LEAKAGE: {len(overlap)} scenario_ids appear in both sweep tuning set and test set! "
+            f"IDs: {sorted(overlap)[:10]}"
+        )
+
+    candidates = [round(t * 0.01, 2) for t in range(10, 91)]  # 0.10 to 0.90
+    sweep_results = []
+
+    scores_tuning = np.array([ccep_score(r, w1, w2, w3, w4) for r in tuning_rows])
+
+    for t in candidates:
+        preds = fitted_ccep_predict(tuning_rows, w1, w2, w3, w4, threshold=t)
+        n_escalate_actual = int(y_tuning.sum())
+        n_auto_actual = int((1 - y_tuning).sum())
+
+        tp = int(((preds == 1) & (y_tuning == 1)).sum())  # correctly escalated
+        fn = int(((preds == 0) & (y_tuning == 1)).sum())  # missed escalations (false auto-resolve)
+        fp = int(((preds == 1) & (y_tuning == 0)).sum())  # unnecessary escalations
+        tn = int(((preds == 0) & (y_tuning == 0)).sum())  # correctly auto-resolved
+
+        recall_esc = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        missed_esc_rate = fn / (fn + tp) if (fn + tp) > 0 else 0.0
+        escalation_rate = (tp + fp) / len(y_tuning)  # fraction sent to humans
+        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        f1 = 2 * prec * recall_esc / (prec + recall_esc) if (prec + recall_esc) > 0 else 0.0
+
+        # ── Boundary margin (robustness of the split at this θ) ──
+        # Distance from θ to the nearest TUNING row already on the wrong side of
+        # the boundary: a missed ESCALATE just below θ, or an unnecessary escalate
+        # just at/above θ. Larger margin ⇒ small score drift cannot flip a verdict.
+        missed_scores = scores_tuning[(y_tuning == 1) & (scores_tuning < t)]
+        unnec_scores = scores_tuning[(y_tuning == 0) & (scores_tuning >= t)]
+        d_missed = (t - float(missed_scores.max())) if missed_scores.size else float("inf")
+        d_unnec = (float(unnec_scores.min()) - t) if unnec_scores.size else float("inf")
+        margin = min(d_missed, d_unnec)  # inf ⇒ θ is perfectly separable on tuning
+
+        sweep_results.append({
+            "threshold": t,
+            "recall_escalate": round(recall_esc, 4),
+            "missed_escalation_rate": round(missed_esc_rate, 4),
+            "precision": round(prec, 4),
+            "f1": round(f1, 4),
+            "escalation_rate": round(escalation_rate, 4),
+            "boundary_margin": round(margin, 4) if math.isfinite(margin) else None,
+            "tp": tp, "fn": fn, "fp": fp, "tn": tn,
+        })
+
+    # Selection rule (updated 2026-10-24): among thresholds meeting the safety
+    # target, maximise the boundary margin (distance to the nearest wrong-side
+    # tuning row), tie-broken by the HIGHER threshold (less escalation overhead).
+    #
+    # WHY: the previous rule ("highest threshold meeting target") parked θ at the
+    # safety knee. On the 255-row tuning set that put θ=0.33 only 0.0024 from the
+    # nearest wrong-side row, so a tiny distribution shift could flip a decision.
+    # Margin-first selection keeps the safety guarantee (missed-esc ≤ 10%) while
+    # buying robustness against that drift.
+    meeting_target = [r for r in sweep_results if r["missed_escalation_rate"] <= MAX_ACCEPTABLE_MISSED_ESCALATION_RATE]
+    # Rows with a perfect (infinite) margin sort first; treat None as +inf.
+    meeting_target.sort(key=lambda r: (r["boundary_margin"] if r["boundary_margin"] is not None else float("inf"),
+                                       r["threshold"]), reverse=True)
+
+    if meeting_target:
+        best = meeting_target[0]
+        print(f"[SWEEP] {len(meeting_target)} thresholds meet target (missed-esc ≤ {MAX_ACCEPTABLE_MISSED_ESCALATION_RATE:.0%}).")
+        print(f"[SWEEP] Selected threshold={best['threshold']:.2f} (max boundary margin, then highest θ).")
+        print(f"[SWEEP]   Recall(escalate)={best['recall_escalate']:.3f}, Missed-esc={best['missed_escalation_rate']:.3f}")
+        print(f"[SWEEP]   Precision={best['precision']:.3f}, F1={best['f1']:.3f}")
+        print(f"[SWEEP]   Escalation rate={best['escalation_rate']:.1%} of tickets go to humans")
+        print(f"[SWEEP]   Boundary margin (nearest wrong-side tuning row)={best['boundary_margin']}")
+    else:
+        # No threshold meets target — pick lowest missed-esc rate
+        best = min(sweep_results, key=lambda r: r["missed_escalation_rate"])
+        print(f"[SWEEP] WARNING: No threshold achieves ≤{MAX_ACCEPTABLE_MISSED_ESCALATION_RATE:.0%} missed-esc on train+val.")
+        print(f"[SWEEP] Using best available: threshold={best['threshold']:.2f}, missed-esc={best['missed_escalation_rate']:.3f}")
+
+    return best["threshold"], sweep_results
 
 
 # ---------------------------------------------------------------------------
@@ -332,23 +448,32 @@ def build_report(
     fitted_beats_fixed,
     w1, w2, w3, w4,
     train_counter,
+    val_counter,
     test_counter,
     total_rows,
+    swept_threshold,
+    sweep_results,
 ):
     lines = []
     lines.append("# NexAgent CCEP — ML Evaluation Report")
     lines.append("")
     lines.append(f"**Generated by:** `fit_weights.py`  ")
     lines.append(f"**Random seed:** 42 (fixed for reproducibility)  ")
-    lines.append(f"**Dataset:** `data/scenarios.csv` ({total_rows} labeled scenarios)  ")
-    lines.append(f"**Split:** Stratified 70/30 (train/test), no row overlap (hash-verified)  ")
+    lines.append(f"**Dataset:** `data/scenarios.csv` ({total_rows} synthetic, single-annotator labeled scenarios)  ")
+    lines.append(f"**Split:** Explicit `split` column — train={train_counter[0]+train_counter[1]}, val={val_counter[0]+val_counter[1]}, test={test_counter[0]+test_counter[1]}  ")
+    lines.append(f"**Threshold:** {swept_threshold:.2f} (tuned on train+val; NOT on test split)  ")
     lines.append(f"**Bootstrap resamples:** {BOOTSTRAP_N}  ")
+    lines.append("")
+    lines.append("> **Limitation:** All scenarios are authored by a single annotator (the project developer).")
+    lines.append("> The dataset is synthetic. Results should be interpreted as proof-of-concept, not as")
+    lines.append("> a production benchmark. Independent labeling by a second annotator is planned.")
     lines.append("")
     lines.append("## Dataset Class Balance")
     lines.append("")
     lines.append("| Split | AUTO_RESOLVE (0) | ESCALATE (1) | Total |")
     lines.append("| :---- | :-------------- | :----------- | :---- |")
     lines.append(f"| Train | {train_counter[0]} | {train_counter[1]} | {train_counter[0]+train_counter[1]} |")
+    lines.append(f"| Val   | {val_counter[0]}  | {val_counter[1]}  | {val_counter[0]+val_counter[1]}  |")
     lines.append(f"| Test  | {test_counter[0]}  | {test_counter[1]}  | {test_counter[0]+test_counter[1]}  |")
     lines.append("")
     lines.append("## Fitted CCEP Weights")
@@ -361,7 +486,51 @@ def build_report(
     lines.append(f"| w4 | action_reversibility_weight | {w4} |")
     lines.append(f"| **Sum** | | **{round(w1+w2+w3+w4, 4)}** |")
     lines.append("")
-    lines.append("## 4-Way Baseline Comparison (Test Split Only)")
+    lines.append("## Threshold Selection (Train+Val Sweep)")
+    lines.append("")
+    lines.append(f"**Safety target (defined before sweep):** Keep missed-escalation rate ≤ {MAX_ACCEPTABLE_MISSED_ESCALATION_RATE:.0%}")
+    lines.append(f"(i.e., recall on the ESCALATE class ≥ {TARGET_ESCALATE_RECALL:.0%}).")
+    lines.append("Among thresholds meeting target, pick the widest **boundary margin** — the distance to the")
+    lines.append("nearest tuning row already on the wrong side of the boundary — tie-broken by the higher θ.")
+    lines.append("A wide margin means a small score drift cannot flip a decision; a threshold parked exactly")
+    lines.append("on the safety knee (the old rule) is fragile.")
+    lines.append("")
+    lines.append(f"**Selected threshold:** {swept_threshold:.2f}")
+    lines.append("")
+    lines.append("### Fine sweep around the selection (0.26–0.34)")
+    lines.append("")
+    lines.append("| Threshold | Recall(esc) | Missed-esc rate | Escalation rate | Precision | Boundary margin | Admissible |")
+    lines.append("| :-------- | :---------- | :-------------- | :-------------- | :-------- | :-------------- | :--------- |")
+    for r in sweep_results:
+        if 0.26 <= r['threshold'] <= 0.34:
+            marker = " ← selected" if abs(r['threshold'] - swept_threshold) < 0.005 else ""
+            adm = "yes" if r["missed_escalation_rate"] <= MAX_ACCEPTABLE_MISSED_ESCALATION_RATE else "no"
+            margin_str = "∞ (separable)" if r["boundary_margin"] is None else f"{r['boundary_margin']:.4f}"
+            lines.append(
+                f"| {r['threshold']:.2f}{marker} | {r['recall_escalate']:.3f} | "
+                f"{r['missed_escalation_rate']:.3f} | {r['escalation_rate']:.1%} | "
+                f"{r['precision']:.3f} | {margin_str} | {adm} |"
+            )
+    lines.append("")
+    lines.append("**Tradeoff:** A lower threshold sends more tickets to humans.")
+    lines.append("The escalation rate column shows the cost of the safety gain.")
+    lines.append("")
+    lines.append("### Coarse sweep (representative thresholds)")
+    lines.append("")
+    lines.append("| Threshold | Recall(esc) | Missed-esc rate | Precision | F1 | Escalation rate |")
+    lines.append("| :-------- | :---------- | :-------------- | :-------- | :- | :-------------- |")
+    # Show a representative sample of thresholds around the selected one
+    interesting = [r for r in sweep_results if r['threshold'] in
+                   [0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.70]]
+    for r in interesting:
+        marker = " ← selected" if abs(r['threshold'] - swept_threshold) < 0.005 else ""
+        lines.append(
+            f"| {r['threshold']:.2f}{marker} | {r['recall_escalate']:.3f} | "
+            f"{r['missed_escalation_rate']:.3f} | {r['precision']:.3f} | "
+            f"{r['f1']:.3f} | {r['escalation_rate']:.1%} |"
+        )
+    lines.append("")
+    lines.append("## 4-Way Baseline Comparison (Held-Out Test Split Only)")
     lines.append("")
     lines.append("| Baseline | Precision | Recall | F1 | P 95% CI | R 95% CI | F1 95% CI |")
     lines.append("| :------- | :-------- | :----- | :- | :------- | :------- | :-------- |")
@@ -373,6 +542,17 @@ def build_report(
             f"| {r['name']} | {r['precision']:.3f} | {r['recall']:.3f} | {r['f1']:.3f} | {p_ci} | {r_ci} | {f_ci} |"
         )
     lines.append("")
+    # Show test-split specific safety metrics for fitted CCEP
+    fitted_res = [r for r in results if 'Fitted' in r['name']][0] if any('Fitted' in r['name'] for r in results) else None
+    if fitted_res:
+        cm = fitted_res['cm']
+        missed_esc = cm['fn'] / (cm['fn'] + cm['tp']) if (cm['fn'] + cm['tp']) > 0 else 0
+        esc_rate = (cm['tp'] + cm['fp']) / (cm['tn'] + cm['fp'] + cm['fn'] + cm['tp'])
+        lines.append(f"**Test-split safety metrics (Fitted CCEP at θ={swept_threshold:.2f}):**")
+        lines.append(f"- Missed-escalation rate (false auto-resolves): **{missed_esc:.1%}** ({cm['fn']} of {cm['fn']+cm['tp']} should-escalate tickets auto-resolved)")
+        lines.append(f"- Escalation rate (tickets sent to humans): **{esc_rate:.1%}**")
+        lines.append(f"- Test split size: {cm['tn']+cm['fp']+cm['fn']+cm['tp']} rows — confidence intervals are wide; treat as directional.")
+        lines.append("")
     lines.append("## Confusion Matrices (Test Split)")
     lines.append("")
     for r in results:
@@ -400,7 +580,7 @@ def build_report(
         lines.append("")
         lines.append(
             "The Fitted CCEP model did **not** outperform the Fixed Threshold baseline on F1 score. "
-            "This is expected on a small synthetic dataset where the fixed threshold (0.60) with "
+            "This is expected on a small synthetic dataset where the fixed threshold with "
             "bootstrap default weights already captures most of the signal. "
             "See `DEVIATIONS.md` for details. The bootstrap-fitted weights are still written to "
             "`weights.json` as they were trained on real signal distributions."
@@ -413,6 +593,8 @@ def build_report(
     lines.append("- [x] Stratified split: preserves class ratio in both train and test")
     lines.append("- [x] Zero row overlap: verified via MD5 hash of scenario_text")
     lines.append("- [x] Evaluation on test split only (no train-set contamination)")
+    lines.append("- [x] Threshold tuned on train+val only (not on test split)")
+    lines.append("- [x] Safety target defined before looking at sweep results")
     lines.append("- [x] `weights.json` schema: `{\"w1\": ..., \"w2\": ..., \"w3\": ..., \"w4\": ...}`")
     lines.append("- [x] Formula unit tests: 5 hand-computed cases match TypeScript scorer")
     lines.append("")
@@ -522,7 +704,7 @@ def main():
     total_rows = len(rows)
 
     # Step 2: Build feature matrix
-    X_train, X_val, X_test, y_train, y_val, y_test, train_counter, val_counter, test_counter = split_dataset(rows)
+    X_train, X_val, X_test, y_train, y_val, y_test, train_counter, val_counter, test_counter, train_idx, val_idx, test_idx = split_dataset(rows)
 
     # Step 3: Normalize
     X_train_n, X_test_n, scaler = normalize(X_train, X_test)
@@ -538,6 +720,20 @@ def main():
     w1, w2, w3, w4 = extract_weights(model, X_train, y_train, X_train_n)
     print(f"\n[WEIGHTS] Fitted: w1={w1}, w2={w2}, w3={w3}, w4={w4}  (sum={round(w1+w2+w3+w4,4)})")
 
+    # Step 5b: Threshold sweep on TRAIN+VAL ONLY (never on test)
+    print("\n" + "=" * 60)
+    print(f"  Threshold Sweep (train+val only, N={len(y_train)+len(y_val)})")
+    print(f"  Safety target: missed-escalation rate ≤ {MAX_ACCEPTABLE_MISSED_ESCALATION_RATE:.0%}")
+    print("=" * 60)
+    # WHY: train_rows and val_rows MUST come from the SAME split as the model was fitted on.
+    # Using the CSV 'split' column here (the old bug) produced a different, overlapping partition
+    # (270/19 vs 210/45) — 42 of 45 test rows were inside the sweep tuning set.
+    # Fix: derive row lists from train_idx/val_idx returned by split_dataset(), same indices everywhere.
+    train_rows = [rows[i] for i in train_idx]
+    val_rows   = [rows[i] for i in val_idx]
+    test_rows  = [rows[i] for i in test_idx]
+    swept_threshold, sweep_results = sweep_threshold(train_rows, val_rows, w1, w2, w3, w4, test_rows=test_rows)
+
     # Step 6: Cross-validation F1 with confidence intervals
     print("\n[CV] Running 5-fold cross-validation for confidence intervals...")
     from sklearn.model_selection import cross_val_score
@@ -546,50 +742,10 @@ def main():
     print(f"[CV] 5-fold F1: {cv_scores.mean():.3f} ± {cv_scores.std() * 2:.3f} (95% CI approx)")
     print(f"[CV] Per-fold:  {[round(s, 3) for s in cv_scores]}")
 
-    # Step 6b: Per-category F1 on test split
-    has_category = "category" in rows[0]
-    if has_category:
-        print("\n[EVAL] Per-category F1 (test split)...")
-        from sklearn.model_selection import StratifiedShuffleSplit as SSS_inner
-        # Re-derive test indices to get category labels
-        test_rows_all = [r for r in rows if r.get("split", "") == "test"]
-        if not test_rows_all:
-            # fallback: use the last 15% by index
-            n_test = len(y_test)
-            test_rows_all = rows[-n_test:]
-        cats = sorted(set(r.get("category", "UNKNOWN") for r in test_rows_all))
-        for cat in cats:
-            cat_rows = [r for r in test_rows_all if r.get("category", "") == cat]
-            if len(cat_rows) < 2:
-                continue
-            y_cat = np.array([int(r["escalate_label"]) for r in cat_rows])
-            X_cat = np.array([[float(r["model_confidence"]), float(r["historical_error_rate"]),
-                               float(r["guardrail_flag_count"]), float(r["action_reversibility_weight"])]
-                              for r in cat_rows])
-            X_cat_n = scaler.transform(X_cat)
-            pred_cat = model.predict(X_cat_n)
-            cat_f1 = f1_score(y_cat, pred_cat, zero_division=0)
-            cat_prec = precision_score(y_cat, pred_cat, zero_division=0)
-            print(f"  {cat:<20} n={len(cat_rows):3d}  P={cat_prec:.3f}  F1={cat_f1:.3f}")
+    # test_rows already computed above (from test_idx — same split as model fitting)
 
-    # Step 7: Get test row dicts for CCEP scoring
-    test_rows = []
-    n_train = int(round(total_rows * 0.70))  # approximate — actual indices from sss
-    # Re-map: collect test rows by matching y_test indices
-    all_rows_list = list(rows)
-    from sklearn.model_selection import StratifiedShuffleSplit as SSS2
-    import hashlib
-    X_all = X_train.tolist() + X_test.tolist()  # Not needed — use original ordering
-    sss2 = SSS2(n_splits=1, test_size=0.30, random_state=RANDOM_SEED)
-    X_full = np.array([[float(r["model_confidence"]), float(r["historical_error_rate"]),
-                        float(r["guardrail_flag_count"]), float(r["action_reversibility_weight"])]
-                       for r in rows])
-    y_full = np.array([int(r["escalate_label"]) for r in rows])
-    train_idx2, test_idx2 = next(sss2.split(X_full, y_full))
-    test_rows = [rows[i] for i in test_idx2]
-
-    # Step 7: 4-way evaluation on test split
-    print("\n[EVAL] Running 4-way baseline evaluation on test split...")
+    # Step 7b: 4-way evaluation on HELD-OUT TEST split with SWEPT threshold
+    print(f"\n[EVAL] Running 4-way baseline evaluation on held-out test split (threshold={swept_threshold:.2f})...")
 
     # Baseline 1: Always Escalate
     pred_always = always_escalate(X_test)
@@ -600,12 +756,12 @@ def main():
     res_never = evaluate("Never Escalate", y_test, pred_never)
 
     # Baseline 3: Fixed Threshold (bootstrap default weights + 0.60 threshold)
-    pred_fixed = fixed_threshold_predict(test_rows)
+    pred_fixed = fixed_threshold_predict(test_rows, threshold=DEFAULT_THRESHOLD)
     res_fixed = evaluate("Fixed Threshold (w=bootstrap, t=0.60)", y_test, pred_fixed)
 
-    # Baseline 4: Fitted CCEP
-    pred_fitted = fitted_ccep_predict(test_rows, w1, w2, w3, w4)
-    res_fitted = evaluate("Fitted CCEP (LogReg weights)", y_test, pred_fitted)
+    # Baseline 4: Fitted CCEP with SWEPT threshold
+    pred_fitted = fitted_ccep_predict(test_rows, w1, w2, w3, w4, threshold=swept_threshold)
+    res_fitted = evaluate(f"Fitted CCEP (swept t={swept_threshold:.2f})", y_test, pred_fitted)
 
     results = [res_always, res_never, res_fixed, res_fitted]
 
@@ -621,8 +777,15 @@ def main():
     else:
         print("[EVAL] [WARN] Fitted CCEP does NOT beat Fixed Threshold on F1 — will note in report.")
 
-    # Step 8: Write weights.json
-    weights_out = {"w1": w1, "w2": w2, "w3": w3, "w4": w4}
+    # Show test-split safety metrics
+    cm_fitted = res_fitted['cm']
+    test_missed_esc = cm_fitted['fn'] / (cm_fitted['fn'] + cm_fitted['tp']) if (cm_fitted['fn'] + cm_fitted['tp']) > 0 else 0
+    test_esc_rate = (cm_fitted['tp'] + cm_fitted['fp']) / (cm_fitted['tn'] + cm_fitted['fp'] + cm_fitted['fn'] + cm_fitted['tp'])
+    print(f"\n[SAFETY] Test split — missed-escalation rate: {test_missed_esc:.1%} ({cm_fitted['fn']} of {cm_fitted['fn']+cm_fitted['tp']} should-escalate tickets)")
+    print(f"[SAFETY] Test split — escalation rate: {test_esc_rate:.1%} of tickets sent to humans")
+
+    # Step 8: Write weights.json (includes threshold)
+    weights_out = {"w1": w1, "w2": w2, "w3": w3, "w4": w4, "threshold": swept_threshold}
     with open(WEIGHTS_OUT, "w") as f:
         json.dump(weights_out, f, indent=2)
     print(f"\n[OUTPUT] weights.json written: {weights_out}")
@@ -631,7 +794,8 @@ def main():
     # Step 9: Write eval_report.md
     report_md = build_report(
         results, fitted_beats_fixed, w1, w2, w3, w4,
-        train_counter, test_counter, total_rows
+        train_counter, val_counter, test_counter, total_rows,
+        swept_threshold, sweep_results,
     )
     with open(REPORT_OUT, "w", encoding="utf-8") as f:
         f.write(report_md)
@@ -647,12 +811,12 @@ def main():
     ir_y = np.array([int(r["escalate_label"]) for r in ir_rows])
 
     # Apply Ticket Triage fitted weights directly (no refitting)
-    pred_ir_fitted = fitted_ccep_predict(ir_rows, w1, w2, w3, w4)
-    res_ir_fitted = evaluate("Fitted CCEP (TT weights → IR)", ir_y, pred_ir_fitted)
+    pred_ir_fitted = fitted_ccep_predict(ir_rows, w1, w2, w3, w4, threshold=swept_threshold)
+    res_ir_fitted = evaluate(f"Fitted CCEP (TT weights -> IR, t={swept_threshold:.2f})", ir_y, pred_ir_fitted)
 
     # Also run fixed threshold on IR for comparison
     pred_ir_fixed = fixed_threshold_predict(ir_rows)
-    res_ir_fixed = evaluate("Fixed Threshold (→ IR)", ir_y, pred_ir_fixed)
+    res_ir_fixed = evaluate("Fixed Threshold (-> IR)", ir_y, pred_ir_fixed)
 
     ir_counter = Counter(ir_y)
     print(f"\n[EVAL4] Incident Response scenarios: {len(ir_rows)}")
