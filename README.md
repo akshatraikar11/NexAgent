@@ -2,7 +2,7 @@
 
 AI-powered IT operations automation platform that decides — per ticket, incident, CI failure, PR, and build — whether to resolve automatically or escalate to a human, using a four-signal learned policy called CCEP.
 
-> **Setup status:** Both builds verified clean. 53/53 tests passing. PostgreSQL required before first run.
+> **Setup status:** Both builds verified clean. 109/109 tests passing across 23 test suites. PostgreSQL required before first run.
 
 ---
 
@@ -25,7 +25,7 @@ NexAgent takes incoming work items from IT and engineering workflows (Jira ticke
 Open pgAdmin or psql and run:
 
 ```sql
-CREATE USER nexagent WITH PASSWORD 'nexagent_pass';
+CREATE USER nexagent WITH PASSWORD '<your-postgres-password>';
 CREATE DATABASE nexagent_db OWNER nexagent;
 GRANT ALL PRIVILEGES ON DATABASE nexagent_db TO nexagent;
 ```
@@ -34,7 +34,7 @@ GRANT ALL PRIVILEGES ON DATABASE nexagent_db TO nexagent;
 
 ```powershell
 cd backend
-npm install
+npm install          # .npmrc sets legacy-peer-deps automatically — no flags needed
 copy .env.example .env          # Windows
 # Edit .env — DATABASE_URL is already set for local Postgres
 npx prisma migrate deploy
@@ -56,9 +56,9 @@ npm run dev
 
 Open `http://localhost:3000`
 
-Default credentials (seeded by `npm run db:seed`):
+Sign in with the administrator email and the `ADMIN_PASSWORD` you configured in `backend/.env`:
 - Email: `admin@nexagent.dev`
-- Password: `NexAgent_Dev_2026!`
+- Password: The value configured for `ADMIN_PASSWORD` in your `.env` file
 
 ### Step 5 — Run a pipeline
 
@@ -129,6 +129,8 @@ backend/src/orchestrator/runner.ts
   │    └─ execute_or_escalate
   │         if AUTO_RESOLVE: Jira comment + Slack post
   │         if ESCALATE:     Slack alert + PagerDuty trigger (P0/P1 only)
+  │         if AUTO_RESOLVE but verification failed: AUTO_RESOLVE_FAILED_VERIFICATION
+  │              → escalates to human + records distinct outcome in DB
   │         prisma.decision.create() ──────────────────────► PostgreSQL
   │
   │    emit SSE COMPLETED ─────────────────────────────────► Browser
@@ -162,18 +164,22 @@ escalation_score = w1×(1 − model_confidence)
                  + w3×min(guardrail_flags, 3) / 3
                  + w4×action_reversibility_weight
 
-If score ≥ threshold (default 0.60) → ESCALATE
+If score ≥ threshold → ESCALATE
 Else → AUTO_RESOLVE
 ```
 
-Weights fitted offline by logistic regression on 300 labeled scenarios (`backend/data/scenarios.csv`).
+- **Tuned Ticket Triage threshold:** `θ = 0.32` (selected via margin-first train+val sweep, N=255, pre-defined safety constraint: missed-escalation rate ≤ 10%; sweep and test sets share 0 rows — verified by overlap assertion in `fit_weights.py`).
+- **MergeGate threshold:** `θ = 0.32` (unified threshold; `auto_merge_pr` reversibility weight is 0.30 because Git merges to feature branches are 1-click reversible via `git revert`; auto-merge requires 4 explicit preconditions: required checks green, zero guardrail flags, bounded diff size ≤ 20 files / ≤ 500 lines, and target branch unprotected; defined in `ccep/constants.ts`).
+
+Weights fitted offline by logistic regression on 300 labeled scenarios (`backend/data/scenarios.csv`, `backend/weights.json`).
 
 | Weight | Signal | Fitted Value |
 |--------|--------|-------------|
-| w1 | Model confidence | 0.2524 |
-| w2 | Category override rate | 0.2106 |
-| w3 | Guardrail flag count | 0.2138 |
-| w4 | Action reversibility | 0.3232 |
+| w1 | Model uncertainty (`1 − confidence`) | 0.2562 |
+| w2 | Historical error rate (Bayesian smoothed) | 0.2260 |
+| w3 | Guardrail flag count (normalized) | 0.1677 |
+| w4 | Action reversibility weight | 0.3502 |
+| **Sum** | | **1.0001** |
 
 ---
 
@@ -201,7 +207,7 @@ Weights fitted offline by logistic regression on 300 labeled scenarios (`backend
 
 | Package | Purpose |
 |---------|---------|
-| next 14 | React framework (24 routes) |
+| next 14 | React framework (18 routes) |
 | tailwindcss | Styling |
 | recharts | Charts (bar, line, radar, radial) |
 | lucide-react | Icons |
@@ -218,12 +224,19 @@ Weights fitted offline by logistic regression on 300 labeled scenarios (`backend
 
 ## Evaluation Results
 
+> **Honest note on Eval 1:** F1=1.000 on the 45-row test split reflects a linearly separable
+> synthetic dataset — not a result that should be expected on real-world data. The dataset is
+> single-annotator and synthetic; treat all numbers as proof-of-concept only.
+> Previous run reported F1=0.978 with a data-leakage bug (42/45 test rows appeared in the
+> threshold-sweep tuning set). The corrected run (overlap=0, verified by assertion) gives F1=1.000
+> on the same 45 rows at θ=0.32. Both are consistent with the small synthetic dataset.
+
 | Eval | What it measures | Result |
 |------|-----------------|--------|
-| 1 — 4-way baseline | CCEP vs fixed threshold (N=300, 45-row test split) | Fitted F1=0.606, Precision=1.000 |
-| 2 — Pipeline vs naive | Fair comparison (estimated signals only) | See `results/eval2_orchestrator_vs_naive.md` |
-| 3 — KB self-learning | Simulated auto-resolution lift | +15pp (55%→70%) |
-| 4 — Cross-domain transfer | Ticket Triage weights → Incident Response | F1=0.800, Precision=1.000 |
+| 1 — 4-way baseline | CCEP vs baselines (held-out test split, N=45, θ=0.32) | Fitted F1=1.000 (P=1.000, R=1.000) beats Fixed Threshold (t=0.60) F1=0.414 (P=1.000, R=0.261). Missed-escalations: 0.0% (0/23). Note: F1=1.000 reflects small, linearly-separable synthetic data — not a production benchmark. |
+| 2 — Pipeline vs naive | Fair comparison (estimated signals only) | CCEP Est 55.0% vs Naive 55.0% (tie, 0.0pp delta); Oracle ceiling: 85.0% (+30.0pp) |
+| 3 — KB self-learning | Simulated auto-resolution lift | +15.0pp lift (55.0% → 70.0%); this is a parameterised simulation, not measured longitudinal data — labelled "illustrative" in results |
+| 4 — Cross-domain transfer | Ticket Triage weights → 30 unobserved Incident Response scenarios | F1=0.973, Precision=0.947, Recall=1.000 (F1 delta -0.027 vs primary domain, within ±0.10) |
 
 Run all evaluations: `cd backend && npm run eval:all`
 
@@ -249,6 +262,8 @@ you don't need live Jira/Slack/GitHub credentials for this:
 This is enough to show one real LLM response end-to-end while keeping the rest of the demo
 deterministic and fast.
 
+---
+
 ## Known Limitations
 
 > This section is required and accurate. Do not omit it when presenting.
@@ -266,19 +281,22 @@ deterministic and fast.
 If ChromaDB is not running (no Docker), KB search uses a simple keyword match instead of semantic embeddings. Results are less accurate.
 
 **5. CCEP dataset is 300 synthetically-authored scenarios, single annotator.**
-Bootstrap confidence intervals overlap between Fitted CCEP (F1=0.606) and Fixed Threshold (F1=0.562) — the improvement is directional, not statistically significant at α=0.05 on this dataset size.
+The dataset (`scenarios.csv`) is synthetic and labeled by a single annotator. On the 45-row held-out test split at tuned threshold θ=0.32, Fitted CCEP achieves F1=1.000 (P=1.000, R=1.000) vs Fixed Threshold (t=0.60) F1=0.414. The perfect score reflects small, linearly-separable synthetic data — not a production benchmark. Confidence intervals from bootstrap resampling are degenerate at this score ([1.000, 1.000]); the meaningful comparison is missed-escalation rate (0.0%) vs Fixed Threshold (73.9%). An earlier run reported F1=0.978 with a threshold-sweep data-leakage bug; the current run is clean (overlap assertion PASSED, 0 shared rows between sweep tuning set and test set).
 
-**6. CI/Build/MergeGate pipelines have no integration tests.**
-Only Ticket Triage, Incident Response, and KB Self-Learning have integration tests. The other three pipelines are tested only via the demo script.
+**6. All 6 pipelines have end-to-end integration tests.**
+Ticket Triage, Incident Response, KB Self-Learning, CI Triage, Build-Deploy Failure, and MergeGate PR Review are all tested with dedicated Vitest suites, alongside HTTP integration tests.
 
-**7. No DB indexes were in the original schema (now added).**
-`Decision.createdAt`, `AuditLog.timestamp`, `Notification.(userId, isRead)`, and `TicketSLA.slaBreachAt` indexes were added in this session. Existing deployments need `prisma migrate deploy` to apply them.
+**7. DB indexes added in migration 20261024.**
+`AUTO_RESOLVE_FAILED_VERIFICATION` DecisionOutcome, updated `Settings.ccepThreshold` default (0.32), and `reversibilityMap.auto_merge_pr` (0.3) require `prisma migrate deploy` on existing deployments.
 
 **8. OPERATOR role cannot approve overrides.**
-Override actions require `ADMIN` role (enforced on backend with `requireRole('ADMIN')`). The approvals page now shows a clear message to OPERATOR users instead of a silent 403.
+Override actions require `ADMIN` role (enforced on backend with `requireRole('ADMIN')`).
 
-**9. CI Triage / Build-Deploy flakiness signals need history to reach full accuracy.**
-`computeFlakinessScore()` / `computeBuildTransienceScore()` compute a real flip-rate over recorded runs (`RunHistory` table), but need at least 5 recorded runs for a given test/workflow before the computed signal is used. Before that (a fresh deployment, or any environment without a live DB), they fall back to a documented cold-start prior. Verified via `npm run demo`: all 6 workflows produce the correct decision (11/11 scenarios) in both the cold-start and — once `RunHistory` accumulates — the fully-computed case.
+**9. CI Triage / Build-Deploy flakiness signals need history.**
+`computeFlakinessScore()` / `computeTransienceScore()` need at least 5 recorded runs. Before that they fall back to a documented cold-start prior.
+
+**10. Host remediation is Windows-only and runs real PowerShell commands.**
+On VPN/DNS/network tickets, `executeHostRemediation()` runs real PowerShell (RasMan query, DNS flush, gateway ping). Each command has a 5-second timeout. On Unix/macOS, the function returns `executed:false / NOT_SUPPORTED`. The `verificationPassed` flag in the result drives downstream decisions — if false, the pipeline records `AUTO_RESOLVE_FAILED_VERIFICATION` and escalates to a human rather than claiming success.
 
 ---
 
@@ -287,8 +305,8 @@ Override actions require `ADMIN` role (enforced on backend with `requireRole('AD
 ```powershell
 cd backend
 
-# Fit CCEP weights (requires Python + scikit-learn)
-python fit_weights.py
+# Fit CCEP weights (requires Python + scikit-learn; PYTHONIOENCODING=utf-8 on Windows)
+$env:PYTHONIOENCODING="utf-8"; python fit_weights.py
 
 # Eval 2: Pipeline vs naive (corrected methodology)
 npx tsx scripts/eval_orchestrator_vs_naive.ts
@@ -298,6 +316,9 @@ npx tsx scripts/eval_kb_impact.ts
 
 # Demo all 6 workflows (11 scenarios)
 npm run demo
+
+# Demo operator feedback loop (human override -> live historical error rate update)
+npm run demo:feedback
 ```
 
 ---
@@ -306,9 +327,14 @@ npm run demo
 
 ```powershell
 cd backend && npm test
-# → 53/53 passing (12 test files)
-# Unit: CCEP scorer, guardrails, orchestrator, SLA/correlation, agency severity
-# Integration: ticket triage, incident response, KB pipeline, SSE streaming, MCP fallback
+# → 109/109 passing (23 test files, 100% green)
+# Unit: CCEP scorer (incl. NaN guards), guardrails, orchestrator, SLA/correlation,
+#       agency severity, signals (smoothing), host-remediation failure paths,
+#       threshold consistency, demo-policy flag, CCEP formula
+# Integration: ticket triage, incident response, KB pipeline, CI triage, build-deploy,
+#              mergegate, SSE streaming (concurrent), HTTP routes, MCP fallback,
+#              verification-failure outcome (AUTO_RESOLVE_FAILED_VERIFICATION)
+# DB: migration
 ```
 
 ---

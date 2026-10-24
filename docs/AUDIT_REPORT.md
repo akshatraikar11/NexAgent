@@ -225,7 +225,7 @@ if (config.langfuse.publicKey && config.langfuse.secretKey) {
 
 | Variable | Required for real? | Default in .env |
 |---|---|---|
-| `DATABASE_URL` | **YES — always** | `postgresql://nexagent:nexagent_pass@localhost:5432/nexagent_db` |
+| `DATABASE_URL` | **YES — always** | `postgresql://nexagent:<password>@localhost:5432/nexagent_db` |
 | `JWT_SECRET` | YES | Weak default (warned at startup) |
 | `MOCK_MODE` | To switch from mock | `true` |
 | `GEMINI_API_KEY` | For real LLM | `mock_gemini_key` |
