@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { DEFAULT_CCEP_THRESHOLD } from '../ccep/constants.js';
 
 dotenv.config();
 
@@ -7,13 +8,13 @@ export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   databaseUrl: process.env.DATABASE_URL || '',
-  jwtSecret: process.env.JWT_SECRET || 'nexagent_super_secret_jwt_key_2026_ccep_eval',
-  ccepThreshold: parseFloat(process.env.CCEP_THRESHOLD || '0.60'),
+  jwtSecret: process.env.JWT_SECRET || '',
+  ccepThreshold: parseFloat(process.env.CCEP_THRESHOLD || String(DEFAULT_CCEP_THRESHOLD)),
   mockMode:
     process.env.MOCK_MODE === 'true' ||
     !process.env.GEMINI_API_KEY ||
     process.env.GEMINI_API_KEY === 'mock_gemini_key',
-  fitWeightsSecret: process.env.FIT_WEIGHTS_SECRET || 'nexagent_fit_weights_internal',
+  fitWeightsSecret: process.env.FIT_WEIGHTS_SECRET || '',
   mcpJiraCmd: process.env.MCP_JIRA_CMD || '',
   mcpSlackCmd: process.env.MCP_SLACK_CMD || '',
   mcpGithubCmd: process.env.MCP_GITHUB_CMD || '',

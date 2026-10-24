@@ -9,6 +9,16 @@ import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const authRouter = Router();
 
+// ── Cookie options ────────────────────────────────────────────────────────────
+const AUTH_COOKIE = 'nexagent_auth';
+const cookieOptions = () => ({
+  httpOnly: true,
+  secure: config.nodeEnv === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 60 * 60 * 1000, // 1 hour (matches JWT expiry)
+  path: '/',
+});
+
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 // Prevents brute-force attacks on login/register endpoints.
 const authLimiter = rateLimit({
@@ -42,7 +52,8 @@ authRouter.post('/register', authLimiter, async (req: AuthenticatedRequest, res:
     const existing = await prisma.user.findUnique({ where: { email: input.email } });
 
     if (existing) {
-      res.status(400).json({ error: 'EMAIL_EXISTS', message: 'User with this email already exists' });
+      // Generic message to prevent account enumeration
+      res.status(400).json({ error: 'REGISTRATION_FAILED', message: 'Registration failed. Please try a different email.' });
       return;
     }
 
@@ -52,7 +63,7 @@ authRouter.post('/register', authLimiter, async (req: AuthenticatedRequest, res:
         email: input.email,
         name: input.name,
         passwordHash,
-        role: input.role || 'OPERATOR',
+        role: 'OPERATOR', // Hardcoded — only admin seeding or explicit promotion can grant ADMIN
       },
     });
 
@@ -62,8 +73,11 @@ authRouter.post('/register', authLimiter, async (req: AuthenticatedRequest, res:
       { expiresIn: '1h' }
     );
 
+    // Set httpOnly cookie (not readable by JS — immune to XSS token theft)
+    res.cookie(AUTH_COOKIE, token, cookieOptions());
+
     res.status(201).json({
-      token,
+      token, // Still returned in body for API clients / backward compat
       user: { id: user.id, email: user.email, name: user.name, role: user.role },
     });
   } catch (error) {
@@ -102,6 +116,9 @@ authRouter.post('/login', loginLimiter, async (req: AuthenticatedRequest, res: R
       { expiresIn: '1h' }
     );
 
+    // Set httpOnly cookie
+    res.cookie(AUTH_COOKIE, token, cookieOptions());
+
     res.json({
       token,
       user: { id: user.id, email: user.email, name: user.name, role: user.role },
@@ -109,6 +126,11 @@ authRouter.post('/login', loginLimiter, async (req: AuthenticatedRequest, res: R
   } catch (error) {
     next(error);
   }
+});
+
+authRouter.post('/logout', (_req, res: Response) => {
+  res.clearCookie(AUTH_COOKIE, { httpOnly: true, path: '/' });
+  res.json({ success: true });
 });
 
 authRouter.get('/me', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next) => {

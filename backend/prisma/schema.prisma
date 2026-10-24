@@ -40,6 +40,7 @@ enum DecisionOutcome {
   AUTO_RESOLVE
   ESCALATE
   PENDING
+  AUTO_RESOLVE_FAILED_VERIFICATION
 }
 
 model User {
@@ -189,8 +190,8 @@ model KBEntry {
 
 model Settings {
   id                        String   @id @default("singleton")
-  ccepThreshold             Float    @default(0.60)
-  reversibilityMap          Json     @default("{\"slack_notification\":0.1,\"jira_comment\":0.3,\"status_change\":0.5,\"auto_merge_pr\":0.9,\"prod_deploy\":1.0}")
+  ccepThreshold             Float    @default(0.32)
+  reversibilityMap          Json     @default("{\"slack_notification\":0.1,\"jira_comment\":0.3,\"status_change\":0.5,\"auto_merge_pr\":0.3,\"prod_deploy\":1.0}")
   weights                   Json     @default("{\"w1\":0.35,\"w2\":0.25,\"w3\":0.20,\"w4\":0.20}")
   updatedAt                 DateTime @updatedAt
 }

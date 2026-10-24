@@ -30,23 +30,43 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(adminPassword, 10);
 
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@nexagent.ai' },
-    update: {
-      // Update the hash in case ADMIN_PASSWORD changed since last seed
-      passwordHash,
-      name: 'NexAgent Admin',
-      role: 'ADMIN',
-    },
-    create: {
-      email: 'admin@nexagent.ai',
-      name: 'NexAgent Admin',
-      passwordHash,
-      role: 'ADMIN',
-    },
-  });
+  const emails = ['admin@nexagent.dev', 'admin@nexagent.ai'];
+  for (const email of emails) {
+    const admin = await prisma.user.upsert({
+      where: { email },
+      update: {
+        passwordHash,
+        name: 'NexAgent Admin',
+        role: 'ADMIN',
+      },
+      create: {
+        email,
+        name: 'NexAgent Admin',
+        passwordHash,
+        role: 'ADMIN',
+      },
+    });
+    console.log(`[SEED] Admin user ready: ${admin.email} (role: ${admin.role}, id: ${admin.id})`);
+  }
 
-  console.log(`[SEED] Admin user ready: ${admin.email} (role: ${admin.role}, id: ${admin.id})`);
+  // Seed standard IT categories — these are required for the historicalErrorRate feedback loop.
+  // Each category accumulates overrideCount/totalDecisions from the Approvals page.
+  const STANDARD_CATEGORIES = [
+    { name: 'IT_SUPPORT',     description: 'IT helpdesk, password resets, device provisioning' },
+    { name: 'BILLING',        description: 'Billing disputes, refunds, invoice issues — PCI-sensitive' },
+    { name: 'INFRASTRUCTURE', description: 'Production infra, outages, deployments, database issues' },
+    { name: 'SECURITY',       description: 'Security incidents, access requests, firewall rules' },
+    { name: 'GENERAL',        description: 'Uncategorized or multi-category tickets' },
+  ];
+
+  for (const cat of STANDARD_CATEGORIES) {
+    const result = await prisma.category.upsert({
+      where: { name: cat.name },
+      update: { description: cat.description },
+      create: cat,
+    });
+    console.log(`[SEED] Category ready: ${result.name} (id: ${result.id})`);
+  }
 }
 
 main()

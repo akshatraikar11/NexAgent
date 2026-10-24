@@ -17,15 +17,15 @@ const EnvSchema = z.object({
 
 const insecureDefaultJwt = 'nexagent_super_secret_jwt_key_2026_ccep_eval';
 
-// Fix #6 High — block startup on default JWT secret in ANY env (not just production).
-// A default secret means tokens are trivially forgeable by anyone who reads the repo.
+// Block startup if JWT_SECRET is missing or is the known insecure default in ANY env.
+// A missing/default secret means tokens are trivially forgeable by anyone who reads the repo.
+if (!config.jwtSecret) {
+  logger.error('[STARTUP] FATAL: JWT_SECRET environment variable is not set. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+  process.exit(1);
+}
 if (config.jwtSecret === insecureDefaultJwt) {
-  if (config.nodeEnv === 'production') {
-    logger.error('[STARTUP] FATAL: JWT_SECRET is the default insecure value. Set a strong random secret.');
-    process.exit(1);
-  } else {
-    logger.warn('[STARTUP] WARNING: JWT_SECRET is the default dev value. Rotate before any real deployment.');
-  }
+  logger.error('[STARTUP] FATAL: JWT_SECRET is the publicly-known default value from the repo. Set a strong random secret.');
+  process.exit(1);
 }
 
 const envResult = EnvSchema.safeParse(process.env);

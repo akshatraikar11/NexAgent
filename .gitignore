@@ -53,3 +53,10 @@ backend/node_modules/.prisma/
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 docker-compose.override.yml
+
+# ── Scratch & Documentation Artifacts ─────────────────────────────────────────
+docs/scratch/
+docs/audit/
+
+
+
