@@ -3,8 +3,9 @@ import { prisma } from '../db/client.js';
 import { isDatabaseConnected } from '../db/client.js';
 import { loadCCEPWeights } from '../ccep/weights.js';
 import { DEFAULT_REVERSIBILITY_MAP } from '../ccep/signals.js';
+import { DEFAULT_CCEP_THRESHOLD } from '../ccep/constants.js';
 import { UpdateSettingsInputSchema } from '../schemas/settings.schema.js';
-import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
+import { authenticateJWT, requireRole, AuthenticatedRequest } from '../middleware/auth.js';
 import { config } from '../config/index.js';
 import { z } from 'zod';
 
@@ -19,7 +20,7 @@ settingsRouter.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: 
     const weights = loadCCEPWeights();
 
     res.json({
-      ccepThreshold: settings?.ccepThreshold ?? 0.60,
+      ccepThreshold: settings?.ccepThreshold ?? DEFAULT_CCEP_THRESHOLD,
       weights: settings?.weights ?? weights,
       reversibilityMap: settings?.reversibilityMap ?? DEFAULT_REVERSIBILITY_MAP,
       updatedAt: settings?.updatedAt ? settings.updatedAt.toISOString() : new Date().toISOString(),
@@ -29,7 +30,7 @@ settingsRouter.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: 
   }
 });
 
-settingsRouter.put('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next) => {
+settingsRouter.put('/', authenticateJWT, requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const input = UpdateSettingsInputSchema.parse(req.body);
 
@@ -42,7 +43,7 @@ settingsRouter.put('/', authenticateJWT, async (req: AuthenticatedRequest, res: 
       },
       create: {
         id: 'singleton',
-        ccepThreshold: input.ccepThreshold ?? 0.60,
+        ccepThreshold: input.ccepThreshold ?? DEFAULT_CCEP_THRESHOLD,
         weights: JSON.parse(JSON.stringify(input.weights ?? loadCCEPWeights())),
         reversibilityMap: JSON.parse(JSON.stringify(input.reversibilityMap ?? DEFAULT_REVERSIBILITY_MAP)),
       },
@@ -129,7 +130,7 @@ settingsRouter.post('/record-fitted-weights', async (req: Request, res: Response
         update: { weights: { w1: input.w1, w2: input.w2, w3: input.w3, w4: input.w4 } },
         create: {
           id: 'singleton',
-          ccepThreshold: 0.60,
+          ccepThreshold: DEFAULT_CCEP_THRESHOLD,
           weights: { w1: input.w1, w2: input.w2, w3: input.w3, w4: input.w4 },
           reversibilityMap: DEFAULT_REVERSIBILITY_MAP,
         },

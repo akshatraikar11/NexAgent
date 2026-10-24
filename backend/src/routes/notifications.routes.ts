@@ -11,7 +11,7 @@
  */
 import { Router, Response } from 'express';
 import { prisma } from '../db/client.js';
-import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
+import { authenticateJWT, requireRole, AuthenticatedRequest } from '../middleware/auth.js';
 import { CreateNotificationSchema } from '../schemas/sla.schema.js';
 
 export const notificationsRouter = Router();
@@ -73,11 +73,23 @@ notificationsRouter.get('/unread-count', authenticateJWT, async (req: Authentica
   } catch (err) { next(err); }
 });
 
-// PATCH /notifications/:id/read
+// PATCH /notifications/:id/read — IDOR protected: only recipient or admin can mark read
 notificationsRouter.patch('/:id/read', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
+    const notifId = String(req.params.id);
+    const existing = await prisma.notification.findUnique({ where: { id: notifId } });
+    if (!existing) {
+      res.status(404).json({ error: 'NOT_FOUND', message: 'Notification not found' });
+      return;
+    }
+
+    if (req.user!.role !== 'ADMIN' && existing.userId !== null && existing.userId !== req.user!.userId) {
+      res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied to this notification' });
+      return;
+    }
+
     const notification = await prisma.notification.update({
-      where: { id: String(req.params.id) },
+      where: { id: notifId },
       data: { isRead: true, readAt: new Date() },
     });
     res.json(notification);
@@ -99,8 +111,8 @@ notificationsRouter.patch('/read-all', authenticateJWT, async (req: Authenticate
   } catch (err) { next(err); }
 });
 
-// POST /notifications (internal/admin)
-notificationsRouter.post('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next) => {
+// POST /notifications (admin/internal only)
+notificationsRouter.post('/', authenticateJWT, requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const input = CreateNotificationSchema.parse(req.body);
     const notification = await createNotification(input);
@@ -108,10 +120,22 @@ notificationsRouter.post('/', authenticateJWT, async (req: AuthenticatedRequest,
   } catch (err) { next(err); }
 });
 
-// DELETE /notifications/:id
+// DELETE /notifications/:id — IDOR protected: users can only delete their own notifications; admins can delete any
 notificationsRouter.delete('/:id', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
-    await prisma.notification.delete({ where: { id: String(req.params.id) } });
+    const notifId = String(req.params.id);
+    const existing = await prisma.notification.findUnique({ where: { id: notifId } });
+    if (!existing) {
+      res.status(404).json({ error: 'NOT_FOUND', message: 'Notification not found' });
+      return;
+    }
+
+    if (req.user!.role !== 'ADMIN' && existing.userId !== req.user!.userId) {
+      res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied to delete this notification' });
+      return;
+    }
+
+    await prisma.notification.delete({ where: { id: notifId } });
     res.status(204).send();
   } catch (err) { next(err); }
 });

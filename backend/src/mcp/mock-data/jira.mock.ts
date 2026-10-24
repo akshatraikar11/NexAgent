@@ -100,6 +100,66 @@ export const MOCK_JIRA_ISSUES: Record<string, JiraIssueMock> = {
     reporter: 'frontend-alerts@company.com',
     created: new Date(Date.now() - 45 * 60_000).toISOString(),
   },
+
+  // ── FinFlow Payments — real-world scenario fixtures ──────────────────────
+  // Company: FinFlow Payments — B2B payments platform, 3000+ merchants, PCI DSS Level 1
+  // Service Desk: IT Helpdesk + SRE On-Call + Engineering (150-person eng org)
+
+  'FF-1001': {
+    id: '20001',
+    key: 'FF-1001',
+    title: 'Merchant Portal Login Broken — SSO Redirect Loop',
+    description: 'Multiple merchants reporting infinite redirect loop on login at merchant.finflow.io. Auth0 SSO redirect_uri mismatch after yesterday\'s NGINX config change. Estimated 400+ merchants unable to log in.',
+    status: 'OPEN',
+    priority: 'HIGH',
+    category: 'INFRASTRUCTURE',
+    reporter: 'helpdesk@finflow.io',
+    created: new Date(Date.now() - 22 * 60_000).toISOString(),
+  },
+  'FF-1002': {
+    id: '20002',
+    key: 'FF-1002',
+    title: 'New Employee Laptop Setup — onboarding-john.doe@finflow.io',
+    description: 'New hire John Doe joining the data engineering team on Monday. Requires: MacBook Pro provisioned, GitHub org invite, Okta enrollment, Jira/Confluence access, and VPN client installation. Standard onboarding checklist.',
+    status: 'OPEN',
+    priority: 'LOW',
+    category: 'IT_SUPPORT',
+    reporter: 'hr@finflow.io',
+    created: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+  },
+  'FF-1003': {
+    id: '20003',
+    key: 'FF-1003',
+    title: 'Duplicate Transaction Charge — Merchant TXN-FF-88821',
+    description: 'Merchant "GreenLeaf Retail" (merchant_id: ff_9921) reporting customer was double-charged $249.99 on transaction TXN-FF-88821 due to idempotency key collision. Chargeback risk. Requires manual refund and audit trail before responding to merchant.',
+    status: 'OPEN',
+    priority: 'HIGH',
+    category: 'BILLING',
+    reporter: 'merchant-support@finflow.io',
+    created: new Date(Date.now() - 55 * 60_000).toISOString(),
+  },
+  'FF-1004': {
+    id: '20004',
+    key: 'FF-1004',
+    title: 'Webhook Delivery Failures — payment.succeeded events not firing',
+    description: 'FinFlow webhook dispatcher reporting 94% delivery failure rate for payment.succeeded events since 09:15 UTC. Root cause: Redis queue worker crashed. Merchants not receiving real-time payment confirmations. Estimated $0 direct loss but SLA breach if unresolved in 30 mins.',
+    status: 'OPEN',
+    priority: 'HIGH',
+    category: 'INFRASTRUCTURE',
+    reporter: 'platform-alerts@finflow.io',
+    created: new Date(Date.now() - 18 * 60_000).toISOString(),
+  },
+  'FF-1005': {
+    id: '20005',
+    key: 'FF-1005',
+    title: 'Add Read Replica to Dashboard Reporting DB — non-urgent',
+    description: 'Analytics team requesting a read replica of the reporting PostgreSQL instance to offload heavy dashboard queries. No production impact. Requires DBA approval and a 2-hour maintenance window on weekend. Task estimated 4 hours.',
+    status: 'OPEN',
+    priority: 'LOW',
+    category: 'INFRASTRUCTURE',
+    reporter: 'analytics-team@finflow.io',
+    created: new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString(),
+  },
 };
 
 export const MOCK_JIRA_DEFAULT_ISSUE: JiraIssueMock = {

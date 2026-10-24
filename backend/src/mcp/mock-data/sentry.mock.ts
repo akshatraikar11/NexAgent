@@ -78,6 +78,30 @@ export const MOCK_SENTRY_ALERTS: Record<string, SentryAlertMock> = {
     firstSeen: new Date(Date.now() - 20 * 60_000).toISOString(),
     tags: { region: 'global', team: 'frontend' },
   },
+
+  // ── FinFlow Payments — Sentry/incident fixtures ──────────────────────────
+  'FF-INC-201': {
+    alertId: 'FF-INC-201',
+    title: 'Payment API — 100% Error Rate on /v2/charge',
+    description: 'All POST /v2/charge requests returning 502 Bad Gateway. Stripe upstream connection refused. Error rate: 8,400 req/min failing. Estimated revenue impact: $18k/min. Started 07 minutes ago.',
+    severity: 'P0',
+    service: 'payment-api',
+    environment: 'production',
+    errorCount: 58800,
+    firstSeen: new Date(Date.now() - 7 * 60_000).toISOString(),
+    tags: { region: 'us-east-1', team: 'payments', stripe_status: 'degraded' },
+  },
+  'FF-INC-202': {
+    alertId: 'FF-INC-202',
+    title: 'Redis Cache Eviction Spike — webhook-queue',
+    description: 'Redis memory usage at 98%. LRU eviction triggered on webhook-queue keys. Causing webhook delivery failures for payment.succeeded events. Non-critical path — merchants will not lose money but SLA timer is running.',
+    severity: 'P2',
+    service: 'webhook-service',
+    environment: 'production',
+    errorCount: 4210,
+    firstSeen: new Date(Date.now() - 25 * 60_000).toISOString(),
+    tags: { region: 'us-east-1', team: 'platform', redis_version: '7.2' },
+  },
 };
 
 export const MOCK_SENTRY_DEFAULT: SentryAlertMock = {

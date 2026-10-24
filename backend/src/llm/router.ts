@@ -12,6 +12,8 @@ export interface LLMRouterResult {
   cosineSimilarity: number;
   modelConfidence: number;
   dualModelAgreed: boolean;
+  /** True if this result came from mock fixtures, not a real LLM call. */
+  isMock: boolean;
 }
 
 const CONFIDENCE_INSTRUCTION = `
@@ -44,12 +46,13 @@ export async function generateDualLLMResponse(
       cosineSimilarity: mockFixture.cosineSimilarity,
       modelConfidence: calibrated.calibratedConfidence,
       dualModelAgreed: calibrated.dualModelAgreed,
+      isMock: true,
     };
   }
 
   try {
     const geminiAi = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const geminiModel = geminiAi.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const geminiModel = geminiAi.getGenerativeModel({ model: 'gemini-flash-lite-latest' });
     const groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
     const fullPrompt = `${prompt}\n${CONFIDENCE_INSTRUCTION}`;
@@ -90,9 +93,10 @@ export async function generateDualLLMResponse(
       cosineSimilarity,
       modelConfidence: calibrated.calibratedConfidence,
       dualModelAgreed: calibrated.dualModelAgreed,
+      isMock: false,
     };
   } catch (error) {
-    logger.warn({ err: error }, '[LLM-ROUTER] Live call failed, falling back to mock response');
+    logger.warn({ err: error }, '[LLM-ROUTER] Live call failed, falling back to mock response — isMock=true will be set');
 
     const mockFixture = (contextTitle && MOCK_TRIAGE_RESPONSES[contextTitle]) || MOCK_DEFAULT_LLM_RESPONSE;
     const calibrated = calculateCalibratedConfidence(
@@ -108,6 +112,7 @@ export async function generateDualLLMResponse(
       cosineSimilarity: mockFixture.cosineSimilarity,
       modelConfidence: calibrated.calibratedConfidence,
       dualModelAgreed: calibrated.dualModelAgreed,
+      isMock: true,
     };
   }
 }
@@ -125,7 +130,7 @@ export async function generateNaiveSinglePrompt(prompt: string): Promise<{ respo
 
   try {
     const geminiAi = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const geminiModel = geminiAi.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const geminiModel = geminiAi.getGenerativeModel({ model: 'gemini-flash-lite-latest' });
     const result = await geminiModel.generateContent(`${prompt}\n${CONFIDENCE_INSTRUCTION}`);
     const text = result.response.text();
     return { response: text, confidence: parseConfidenceFromText(text, 0.75) };

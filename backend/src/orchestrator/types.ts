@@ -6,8 +6,20 @@ export interface KBMatchItem {
   timesReused?: number;
 }
 
+/**
+ * PipelineContext — the mutable state bag passed through every pipeline step.
+ *
+ * Fields populated by individual steps (kbMatches, llmResponse, modelConfidence, etc.)
+ * are required on the interface so that production code after those steps can read them
+ * without null checks. Test code that needs to construct a partial context should
+ * use `makeTestCtx()` from tests/helpers/pipeline-context.ts.
+ *
+ * AUTO_RESOLVE_FAILED_VERIFICATION: CCEP said auto-resolve but post-fix verification
+ * failed → treated as escalation. Set in ticket-triage.pipeline.ts execute_or_escalate.
+ */
 export interface PipelineContext {
   runId: string;
+  pipelineType?: PipelineType;
   ticketId?: string;
   externalTicketId?: string;
   alertId?: string;
@@ -30,7 +42,7 @@ export interface PipelineContext {
   actionReversibilityWeight: number;
   ccepScore: number;
   threshold: number;
-  decision: 'AUTO_RESOLVE' | 'ESCALATE' | 'PENDING';
+  decision: 'AUTO_RESOLVE' | 'ESCALATE' | 'PENDING' | 'AUTO_RESOLVE_FAILED_VERIFICATION';
   signalBreakdown?: Record<string, number>;
   stepResults: Record<string, unknown>;
   metadata: Record<string, unknown>;

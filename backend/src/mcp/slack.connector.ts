@@ -39,16 +39,30 @@ export class SlackMCPConnector {
     // ── Real Slack Web API ─────────────────────────────────────────────────
     if (this.useRealHttp) {
       try {
-        const res = await fetch('https://slack.com/api/chat.postMessage', {
+        let targetChannel = process.env.SLACK_DEFAULT_CHANNEL || (channel.startsWith('#') ? channel.slice(1) : channel);
+        let res = await fetch('https://slack.com/api/chat.postMessage', {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ channel, text }),
+          body: JSON.stringify({ channel: targetChannel, text }),
           signal: AbortSignal.timeout(8000),
         });
-        const data = await res.json() as { ok: boolean; ts?: string; error?: string };
+        let data = await res.json() as { ok: boolean; ts?: string; error?: string };
+        
+        // If specific channel not found, try fallback channel
+        if (!data.ok && data.error === 'channel_not_found' && targetChannel !== 'all-akshat' && targetChannel !== 'general') {
+          logger.warn(`[MCP-SLACK] Channel "${targetChannel}" not found, retrying with fallback channel "all-akshat"`);
+          res = await fetch('https://slack.com/api/chat.postMessage', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel: 'all-akshat', text }),
+            signal: AbortSignal.timeout(8000),
+          });
+          data = await res.json() as { ok: boolean; ts?: string; error?: string };
+        }
+
         if (!data.ok) throw new Error(`Slack API error: ${data.error}`);
-        logger.info(`[MCP-SLACK] Real HTTP: posted to ${channel} (ts=${data.ts})`);
-        return createMockSlackResult(channel, text);
+        logger.info(`[MCP-SLACK] Real HTTP: posted to ${targetChannel} (ts=${data.ts})`);
+        return createMockSlackResult(targetChannel, text);
       } catch (err) {
         logger.warn({ err }, '[MCP-SLACK] Real HTTP failed, falling back');
       }

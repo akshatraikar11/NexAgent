@@ -3,8 +3,8 @@ import { prisma } from '../db/client.js';
 export const DEFAULT_REVERSIBILITY_MAP: Record<string, number> = {
   slack_notification: 0.1,
   jira_comment: 0.3,
+  auto_merge_pr: 0.3, // Reversibility weight: 0.30 (in Git, merges to feature/dev branches are 1-click reversible via git revert without prod deployment risk)
   status_change: 0.5,
-  auto_merge_pr: 0.9,
   prod_deploy: 1.0,
 };
 
@@ -29,10 +29,34 @@ export function calculateCalibratedConfidence(
 }
 
 /**
- * Fetch category historical error rate from database (overrideCount / totalDecisions)
+ * Fetch category historical error rate from database with Bayesian smoothing.
+ *
+ * Raw rate: overrideCount / totalDecisions
+ * Problem: 1 override on 1 decision = 1.0 — a single click swings a whole category.
+ *
+ * Smoothed rate: (overrides + α) / (decisions + α + β)
+ * With α=1, β=9 (Beta prior implying ~10% base error rate prior mean):
+ *   0 overrides,  0 decisions → 1/10 = 0.100 (10.0% unobserved category prior mean)
+ *   0 overrides, 10 decisions → 1/20 = 0.050 (5.0% posterior for clean category with 10 decisions)
+ *   1 override,   1 decision  → 2/11 = 0.182 (not 1.0)
+ *   3 overrides, 13 decisions → 4/23 = 0.174 (demonstrated in demo:flip)
+ *   5 overrides, 50 decisions → 6/60 = 0.100
+ *
+ * This is a standard Bayesian approach (Beta-Binomial conjugate prior).
  */
-export async function getHistoricalErrorRate(categoryId?: string): Promise<number> {
-  if (!categoryId) return 0.0;
+export const SMOOTHING_ALPHA = 1;  // pseudo-count for overrides (prior successes)
+export const SMOOTHING_BETA = 9;   // pseudo-count for non-overrides (prior failures)
+
+export function computeSmoothedErrorRate(overrides: number, totalDecisions: number): number {
+  if (totalDecisions <= 0) {
+    return Number((SMOOTHING_ALPHA / (SMOOTHING_ALPHA + SMOOTHING_BETA)).toFixed(4));
+  }
+  const smoothed = (overrides + SMOOTHING_ALPHA) / (totalDecisions + SMOOTHING_ALPHA + SMOOTHING_BETA);
+  return Number(smoothed.toFixed(4));
+}
+
+export async function getHistoricalErrorRate(categoryIdOrName?: string): Promise<number> {
+  if (!categoryIdOrName) return 0.0;
 
   try {
     const { isDatabaseConnected } = await import('../db/client.js');
@@ -40,17 +64,48 @@ export async function getHistoricalErrorRate(categoryId?: string): Promise<numbe
       return 0.10; // Default historical error rate when DB is offline
     }
 
-    const category = await prisma.category.findUnique({
-      where: { id: categoryId },
+    const category = await prisma.category.findFirst({
+      where: {
+        OR: [
+          { id: categoryIdOrName },
+          { name: categoryIdOrName },
+          { name: { equals: categoryIdOrName, mode: 'insensitive' } },
+        ],
+      },
     });
 
     if (!category || category.totalDecisions === 0) {
-      return 0.0;
+      // No decisions yet — return the prior: α / (α + β) = 1/10 = 0.10
+      return computeSmoothedErrorRate(0, 0);
     }
 
-    return Number((category.overrideCount / category.totalDecisions).toFixed(4));
+    // Bayesian smoothed rate
+    return computeSmoothedErrorRate(category.overrideCount, category.totalDecisions);
   } catch (error) {
     return 0.0;
+  }
+}
+
+/**
+ * Resolve Category record by either id or name.
+ */
+export async function resolveCategory(categoryIdOrName?: string) {
+  if (!categoryIdOrName) return null;
+  try {
+    const { isDatabaseConnected } = await import('../db/client.js');
+    if (!(await isDatabaseConnected())) return null;
+
+    return await prisma.category.findFirst({
+      where: {
+        OR: [
+          { id: categoryIdOrName },
+          { name: categoryIdOrName },
+          { name: { equals: categoryIdOrName, mode: 'insensitive' } },
+        ],
+      },
+    });
+  } catch {
+    return null;
   }
 }
 

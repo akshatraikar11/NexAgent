@@ -6,6 +6,8 @@ import { getPipelineSteps } from '../orchestrator/registry.js';
 import { runPipeline } from '../orchestrator/runner.js';
 import { PipelineContext } from '../orchestrator/types.js';
 import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
+import { config } from '../config/index.js';
+import { DEFAULT_CCEP_THRESHOLD, MERGEGATE_THRESHOLD } from '../ccep/constants.js';
 
 export const pipelineRouter = Router();
 
@@ -15,6 +17,7 @@ const pipelineLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 30,
   keyGenerator: (req) => (req as AuthenticatedRequest).user?.userId ?? req.ip ?? 'unknown',
+  validate: false,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'TOO_MANY_REQUESTS', message: 'Pipeline rate limit exceeded. Max 30 runs per 10 minutes.' },
@@ -43,7 +46,10 @@ pipelineRouter.post('/run', authenticateJWT, pipelineLimiter, async (req: Authen
       data: {
         type: input.pipelineType,
         status: 'PENDING',
-        context: JSON.parse(JSON.stringify(input)),
+        context: {
+          ...JSON.parse(JSON.stringify(input)),
+          userId: req.user!.userId,
+        },
       },
     });
 
@@ -56,7 +62,9 @@ pipelineRouter.post('/run', authenticateJWT, pipelineLimiter, async (req: Authen
       ticketDescription: input.ticketDescription,
       categoryId: input.categoryId,
       actionType: input.actionType,
-      threshold: input.threshold || 0.60,
+      // MergeGate uses the unified threshold (0.32) with rev=0.30 and 4 safety preconditions.
+      // Preconditions (CI passing, 0 guardrails, bounded diff, unprotected branch) gate the action.
+      threshold: input.threshold || (input.pipelineType === 'MERGEGATE' ? MERGEGATE_THRESHOLD : config.ccepThreshold),
       kbMatches: [],
       llmResponse: '',
       geminiConfidence: 0,
@@ -101,6 +109,7 @@ pipelineRouter.post('/run', authenticateJWT, pipelineLimiter, async (req: Authen
 /**
  * GET /pipelines/:runId
  * Poll for final result after SSE stream ends.
+ * IDOR protection: verified caller ownership unless ADMIN.
  */
 pipelineRouter.get('/:runId', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
@@ -117,11 +126,27 @@ pipelineRouter.get('/:runId', authenticateJWT, async (req: AuthenticatedRequest,
       return;
     }
 
+    const runContext = (run.context as Record<string, unknown>) || {};
+    const runUserId = runContext.userId as string | undefined;
+
+    // IDOR check: if run was created by a specific user, ensure only that user or ADMIN can inspect it
+    if (req.user!.role !== 'ADMIN' && runUserId && runUserId !== req.user!.userId) {
+      res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied to this pipeline run' });
+      return;
+    }
+
     const decision = run.decisions?.[0];
+    const metadata = (runContext.metadata as Record<string, unknown>) || {};
+    const stepResults = (runContext.stepResults as Record<string, { liveHostTelemetry?: unknown }>) || {};
+    const liveHostTelemetry = metadata.liveHostTelemetry || stepResults['execute_or_escalate']?.liveHostTelemetry;
+
     res.json({
       ...run,
       decision: decision?.decision ?? 'PENDING',
       ccepScore: decision?.ccepScore ?? 0,
+      threshold: decision?.threshold ?? config.ccepThreshold,
+      isMockLLM: (metadata.isMockLLM as boolean | undefined) ?? (config.mockMode || !config.geminiApiKey),
+      liveHostTelemetry,
     });
   } catch (error) {
     next(error);

@@ -21,7 +21,10 @@ ticketRouter.post('/', authenticateJWT, async (req: AuthenticatedRequest, res: R
         categoryId: input.categoryId,
         priority: input.priority || 'MEDIUM',
         source: input.source || 'JIRA',
-        metadata: JSON.parse(JSON.stringify(input.metadata || {})),
+        metadata: {
+          ...JSON.parse(JSON.stringify(input.metadata || {})),
+          createdBy: req.user!.userId,
+        },
       },
     });
 
@@ -41,7 +44,13 @@ ticketRouter.post('/', authenticateJWT, async (req: AuthenticatedRequest, res: R
 
 ticketRouter.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
+    const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10), 100);
+    const page = Math.max(parseInt(String(req.query.page ?? '1'), 10), 1);
+    const skip = (page - 1) * limit;
+
     const tickets = await prisma.ticket.findMany({
+      skip,
+      take: limit,
       orderBy: { createdAt: 'desc' },
       include: { category: true, decisions: true },
     });
@@ -60,6 +69,15 @@ ticketRouter.get('/:id', authenticateJWT, async (req: AuthenticatedRequest, res:
 
     if (!ticket) {
       res.status(404).json({ error: 'NOT_FOUND', message: 'Ticket not found' });
+      return;
+    }
+
+    const meta = (ticket.metadata as Record<string, unknown> | null) || {};
+    const createdBy = meta.createdBy as string | undefined;
+
+    // IDOR protection: if ticket has a specific creator, only that user or ADMIN can access
+    if (req.user!.role !== 'ADMIN' && createdBy && createdBy !== req.user!.userId) {
+      res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied to this ticket' });
       return;
     }
 

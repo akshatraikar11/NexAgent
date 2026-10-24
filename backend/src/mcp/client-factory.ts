@@ -46,3 +46,6 @@ export async function ensureMCPClients(): Promise<void> {
     getMCPClient('sentry'),
   ]);
 }
+
+// Re-export PagerDuty REST connector (5th integration alongside Jira, Slack, GitHub, Sentry)
+export { pagerdutyConnector, PagerDutyConnector } from './pagerduty.connector.js';

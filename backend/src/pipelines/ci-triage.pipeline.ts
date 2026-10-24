@@ -18,6 +18,7 @@ import { loadCCEPWeights } from '../ccep/weights.js';
 import { getActionReversibilityWeight, computeFlakinessScore } from '../ccep/signals.js';
 import { prisma } from '../db/client.js';
 import { logger } from '../utils/logger.js';
+import { config } from '../config/index.js';
 
 const githubConnector = new GitHubMCPConnector();
 const slackConnector = new SlackMCPConnector();
@@ -151,7 +152,7 @@ export const CI_TRIAGE_STEPS: Step[] = [
           actionReversibilityWeight,
         },
         weights,
-        ctx.threshold || 0.60
+        ctx.threshold ?? config.ccepThreshold
       );
 
       ctx.ccepScore = scoreResult.ccepScore;

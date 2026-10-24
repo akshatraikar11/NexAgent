@@ -11,7 +11,7 @@ import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
 
 export const analyticsRouter = Router();
 
-// GET /analytics/summary
+// GET /analytics/summary — Optimized via DB-level aggregates (no full-table memory loads)
 analyticsRouter.get('/summary', authenticateJWT, async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     // Per-pipeline type breakdown
@@ -19,44 +19,58 @@ analyticsRouter.get('/summary', authenticateJWT, async (req: AuthenticatedReques
 
     const pipelineSummary = await Promise.all(
       pipelineTypes.map(async (type) => {
-        const runs = await prisma.pipelineRun.findMany({
-          where: { type },
-          include: { decisions: true },
-        });
+        const [totalRuns, completed, decisionStats, ccepAgg] = await Promise.all([
+          prisma.pipelineRun.count({ where: { type } }),
+          prisma.pipelineRun.count({ where: { type, status: 'COMPLETED' } }),
+          prisma.decision.groupBy({
+            by: ['decision'],
+            where: { pipelineRun: { type } },
+            _count: { _all: true },
+          }),
+          prisma.decision.aggregate({
+            where: { pipelineRun: { type } },
+            _avg: { ccepScore: true },
+          }),
+        ]);
 
-        const completed = runs.filter((r) => r.status === 'COMPLETED').length;
-        const decisions = runs.flatMap((r) => r.decisions);
-        const autoResolved = decisions.filter((d) => d.decision === 'AUTO_RESOLVE').length;
-        const escalated = decisions.filter((d) => d.decision === 'ESCALATE').length;
-        const avgCCEP = decisions.length
-          ? decisions.reduce((s, d) => s + d.ccepScore, 0) / decisions.length
-          : 0;
+        let autoResolved = 0;
+        let escalated = 0;
+        let totalDecisions = 0;
+
+        for (const stat of decisionStats) {
+          totalDecisions += stat._count._all;
+          if (stat.decision === 'AUTO_RESOLVE') autoResolved = stat._count._all;
+          if (stat.decision === 'ESCALATE') escalated = stat._count._all;
+        }
+
+        const avgCCEP = ccepAgg._avg.ccepScore ?? 0;
 
         return {
           type,
-          totalRuns: runs.length,
+          totalRuns,
           completed,
           autoResolved,
           escalated,
-          autoResolveRate: decisions.length ? autoResolved / decisions.length : 0,
+          autoResolveRate: totalDecisions ? autoResolved / totalDecisions : 0,
           avgCCEPScore: Number(avgCCEP.toFixed(4)),
         };
       })
     );
 
-    // Totals
-    const allDecisions = await prisma.decision.findMany();
-    const totalAuto = allDecisions.filter((d) => d.decision === 'AUTO_RESOLVE').length;
-    const totalEscalated = allDecisions.filter((d) => d.decision === 'ESCALATE').length;
-    const overallAutoRate = allDecisions.length ? totalAuto / allDecisions.length : 0;
-
-    const totalOverrides = await prisma.humanOverride.count();
-    const totalKBEntries = await prisma.kBEntry.count({ where: { isOverridden: false } });
+    // Totals via DB aggregates
+    const [totalDecisions, totalAuto, totalEscalated, totalOverrides, totalKBEntries] = await Promise.all([
+      prisma.decision.count(),
+      prisma.decision.count({ where: { decision: 'AUTO_RESOLVE' } }),
+      prisma.decision.count({ where: { decision: 'ESCALATE' } }),
+      prisma.humanOverride.count(),
+      prisma.kBEntry.count({ where: { isOverridden: false } }),
+    ]);
+    const overallAutoRate = totalDecisions ? totalAuto / totalDecisions : 0;
 
     res.json({
       pipelines: pipelineSummary,
       totals: {
-        decisions: allDecisions.length,
+        decisions: totalDecisions,
         autoResolved: totalAuto,
         escalated: totalEscalated,
         overallAutoResolveRate: Number(overallAutoRate.toFixed(4)),

@@ -25,7 +25,7 @@ const SQLI_PATTERNS: { name: string; regex: RegExp }[] = [
   { name: 'or_1_equals_1', regex: /\bOR\s+['"]?1['"]?\s*=\s*['"]?1['"]?\b/gi },
   { name: 'delete_from', regex: /\bDELETE\s+FROM\b/gi },
   { name: 'exec_cmd', regex: /\bEXEC(?:UTE)?\s*\(/gi },
-  { name: 'sql_comment', regex: /--|\/\*/g },
+  { name: 'sql_comment', regex: /(?<!-)--(?:[ \t]|$|\r|\n)|\/\*/g },
 ];
 
 const PROMPT_INJECTION_PATTERNS: { name: string; regex: RegExp }[] = [

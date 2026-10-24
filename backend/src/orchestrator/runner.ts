@@ -256,5 +256,21 @@ export async function runPipeline(
   }
 
   logger.info(`[ORCHESTRATOR] Successfully completed pipeline runId: ${runId}. Final decision: ${context.decision}`);
+
+  // Emit final pipeline COMPLETED event directly via SSE
+  sseManager.emitEvent(runId, {
+    runId,
+    stepName: 'pipeline',
+    status: 'COMPLETED',
+    timestamp: new Date().toISOString(),
+    data: {
+      decision: context.decision,
+      ccepScore: context.ccepScore,
+      liveHostTelemetry:
+        context.metadata?.liveHostTelemetry ||
+        (context.stepResults?.['execute_or_escalate'] as { liveHostTelemetry?: unknown })?.liveHostTelemetry,
+    },
+  });
+
   return context;
 }

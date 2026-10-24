@@ -27,7 +27,7 @@ const SEVERITY_RULES: {
   },
   {
     severity: 'P1',
-    keywords: ['database', 'outage', 'connection pool', '50% error', 'latency spike', 'prod', 'production', 'memory exhaustion', 'cascade'],
+    keywords: ['database', 'outage', 'connection pool', '50% error', 'latency spike', 'prod', 'production', 'memory exhaustion', 'cascade', 'sso', 'login broken', 'unable to log', 'redirect loop', 'login failure'],
     responseTime: '< 1 hour',
     team: ['Infrastructure Maintainer', 'DevOps Automator', 'Support Responder'],
   },

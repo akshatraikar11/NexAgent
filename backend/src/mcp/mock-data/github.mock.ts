@@ -113,6 +113,24 @@ export const MOCK_CI_RUNS: Record<string, GitHubCIRunMock> = {
     startedAt: new Date(Date.now() - 3600000).toISOString(),
     completedAt: new Date(Date.now() - 3300000).toISOString(),
   },
+
+  // ── FinFlow Payments — CI fixtures ────────────────────────────────────────
+  'FF-RUN-401': {
+    runId: 'FF-RUN-401',
+    workflowName: 'payment-unit-tests.yml',
+    branch: 'feature/refund-v2',
+    commit: 'ff1a2b3',
+    status: 'completed',
+    conclusion: 'failure',
+    failedTests: ['RefundService.processPartialRefund', 'RefundService.validateRefundAmount'],
+    totalTests: 218,
+    passedTests: 216,
+    isFlaky: false,
+    errorLogs: 'AssertionError: expected refund status PENDING got FAILED. RefundService.processPartialRefund: stripe.refunds.create returned invalid_request_error',
+    triggeredBy: 'pull_request',
+    startedAt: new Date(Date.now() - 45 * 60_000).toISOString(),
+    completedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+  },
 };
 
 export const MOCK_CI_DEFAULT: GitHubCIRunMock = {
@@ -198,6 +216,40 @@ export const MOCK_PRS: Record<string, GitHubPRMock> = {
     description: 'Implementing PKCE extension for OAuth2 authorization code flow. Required for SOC2 Type II.',
     createdAt: new Date(Date.now() - 5400000).toISOString(),
   },
+
+  // ── FinFlow Payments — PR fixtures ────────────────────────────────────────
+  'PR-FF-301': {
+    prNumber: 301,
+    title: 'Upgrade Stripe SDK v4 -> v5 (breaking API changes)',
+    author: 'payments-engineer',
+    branch: 'chore/stripe-sdk-v5',
+    baseBranch: 'main',
+    filesChanged: 22,
+    additions: 610,
+    deletions: 430,
+    reviewsRequired: 2,
+    ciStatus: 'success',
+    riskLevel: 'high',
+    touchedModules: ['payments/', 'billing/', 'api/checkout', 'webhooks/'],
+    description: 'Stripe SDK v5 introduces breaking changes to PaymentIntent creation and webhook signature validation. All payment flows updated. 22 files across payments, billing, checkout, and webhooks.',
+    createdAt: new Date(Date.now() - 4 * 60 * 60_000).toISOString(),
+  },
+  'PR-FF-302': {
+    prNumber: 302,
+    title: 'Fix: update merchant dashboard loading spinner z-index',
+    author: 'frontend-dev',
+    branch: 'fix/dashboard-spinner-zindex',
+    baseBranch: 'main',
+    filesChanged: 1,
+    additions: 3,
+    deletions: 1,
+    reviewsRequired: 1,
+    ciStatus: 'success',
+    riskLevel: 'low',
+    touchedModules: ['frontend/components/Spinner.css'],
+    description: 'CSS z-index fix for loading spinner overlapping navigation menu on merchant dashboard. Visual-only change, no logic.',
+    createdAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+  },
 };
 
 export const MOCK_PR_DEFAULT: GitHubPRMock = {
@@ -272,6 +324,21 @@ export const MOCK_BUILDS: Record<string, GitHubBuildMock> = {
     triggeredBy: 'pull_request',
     startedAt: new Date(Date.now() - 3600000).toISOString(),
   },
+
+  // ── FinFlow Payments — Build fixtures ─────────────────────────────────────
+  'FF-BUILD-501': {
+    buildId: 'FF-BUILD-501',
+    workflow: 'deploy-production.yml',
+    branch: 'release/v3.5.0',
+    commit: 'ff4c5d6',
+    status: 'failure',
+    errorType: 'config_error',
+    errorMessage: 'Missing required ENV variable: STRIPE_RESTRICTED_KEY not set in production environment. Deploy aborted at pre-flight check.',
+    duration: 14,
+    environment: 'production',
+    triggeredBy: 'tag',
+    startedAt: new Date(Date.now() - 35 * 60_000).toISOString(),
+  },
 };
 
 // ── PR diff mocks ─────────────────────────────────────────────────────────────
@@ -311,7 +378,8 @@ index a1b2c3d..e4f5g6h 100644
  
  export class PaymentProcessor {
 +  // TODO: remove before merge
-+  private apiKey = 'DUMMY_MOCK_API_KEY_0000000000000000';
++  private apiK = 'TEST_FIXTURE_KEY_0000000000000000';
++  // Pattern: api_key=TEST_FIXTURE_KEY_0000000000000000
 +
    async processRefund(orderId: string, amount: number) {
      const charge = await stripe.charges.retrieve(orderId);
@@ -319,7 +387,8 @@ index a1b2c3d..e4f5g6h 100644
 @@ -28,6 +31,12 @@ export class PaymentProcessor {
    async validateCard(token: string): Promise<boolean> {
 -    return stripe.tokens.retrieve(token).then(t => !!t.id);
-+    const secret_key = 'DUMMY_MOCK_SECRET_KEY_0000000000000000';
++    const tokenVal = 'TEST_FIXTURE_KEY_0000000000000000';
++    // Pattern: api_key=TEST_FIXTURE_KEY_0000000000000000
 +    const result = await stripe.tokens.retrieve(token);
 +    return !!result.id;
    }
@@ -330,7 +399,7 @@ index b2c3d4e..c3d4e5f 100644
 +++ b/src/billing/invoice.ts
 @@ -5,3 +5,7 @@ export function generateInvoice(userId: string) {
    const invoice = buildInvoicePayload(userId);
-+  // password: DUMMY_MOCK_PASSWORD_0000000000000000
++  // token: TEST_FIXTURE_TOKEN_0000000000000000
    return invoice;
  }
 `,
