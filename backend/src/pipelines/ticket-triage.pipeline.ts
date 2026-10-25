@@ -29,10 +29,10 @@ export const TICKET_TRIAGE_STEPS: Step[] = [
       const issueKey = ctx.externalTicketId || ctx.ticketId || 'JIRA-101';
       const issue = await jiraConnector.getIssue(issueKey);
 
-      ctx.externalTicketId = issue.key;
-      ctx.ticketTitle = issue.title;
-      ctx.ticketDescription = issue.description;
-      ctx.category = issue.category;
+      ctx.externalTicketId = ctx.externalTicketId || issue.key;
+      ctx.ticketTitle = ctx.ticketTitle || issue.title;
+      ctx.ticketDescription = ctx.ticketDescription || issue.description;
+      ctx.category = ctx.category || issue.category || 'IT_SUPPORT';
 
       // Upsert the category into DB so historicalErrorRate can accumulate real override data.
       // This wires the tacit knowledge feedback loop — overrides from the Approvals page
@@ -286,6 +286,15 @@ export const TICKET_TRIAGE_STEPS: Step[] = [
           slackResult,
           liveHostTelemetry,
         };
+        if (ctx.runId) {
+          sseManager.emitEvent(ctx.runId, {
+            runId: ctx.runId,
+            stepName: 'execute_or_escalate',
+            status: 'COMPLETED',
+            timestamp: new Date().toISOString(),
+            data: { log: `✅ Posted diagnostic comment to Jira (${ctx.externalTicketId}) & updated Slack (#it-support)` },
+          });
+        }
       } else {
         // Hold for human review & notify Slack escalation channel
         const slackResult = await slackConnector.postAlert(
@@ -294,6 +303,15 @@ export const TICKET_TRIAGE_STEPS: Step[] = [
           `⚠️ Ticket ${ctx.externalTicketId} ESCALATED to human review (CCEP Score: ${ctx.ccepScore} >= Threshold: ${ctx.threshold})`
         );
         ctx.stepResults['execute_or_escalate'] = { action: 'HUMAN_ESCALATION_HELD', slackResult };
+        if (ctx.runId) {
+          sseManager.emitEvent(ctx.runId, {
+            runId: ctx.runId,
+            stepName: 'execute_or_escalate',
+            status: 'COMPLETED',
+            timestamp: new Date().toISOString(),
+            data: { log: `🚨 Ticket ${ctx.externalTicketId} held for human review & dispatched to Slack (#it-escalations)` },
+          });
+        }
       }
 
       // Persist Decision entry in database

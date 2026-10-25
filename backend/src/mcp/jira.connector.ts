@@ -52,18 +52,44 @@ export class JiraMCPConnector {
         if (!res.ok) throw new Error(`Jira HTTP ${res.status}`);
         const data = await res.json() as {
           key: string;
-          fields: { summary: string; description: { content?: { content?: { text?: string }[] }[] } | null; status: { name: string }; priority: { name: string }; issuetype: { name: string } };
+          fields: {
+            summary: string;
+            description: unknown;
+            status?: { name: string };
+            priority?: { name: string };
+            issuetype?: { name: string };
+          };
         };
-        const description = data.fields.description?.content?.[0]?.content?.[0]?.text ?? 'No description';
+
+        const extractAdf = (doc: unknown): string => {
+          if (!doc) return '';
+          if (typeof doc === 'string') return doc;
+          if (typeof doc === 'object' && doc !== null) {
+            const d = doc as Record<string, unknown>;
+            if (typeof d.text === 'string') return d.text;
+            if (Array.isArray(d.content)) return d.content.map(extractAdf).filter(Boolean).join(' ');
+          }
+          return '';
+        };
+
+        const description = extractAdf(data.fields.description) || 'No description provided';
+        const typeName = data.fields.issuetype?.name?.toUpperCase() || 'SUPPORT';
+        const summaryLower = (data.fields.summary || '').toLowerCase();
+        const category = summaryLower.includes('vpn') || summaryLower.includes('network') || summaryLower.includes('dns')
+          ? 'IT_SUPPORT'
+          : summaryLower.includes('bill') || summaryLower.includes('refund') || summaryLower.includes('charge')
+          ? 'BILLING'
+          : typeName === 'TASK' ? 'IT_SUPPORT' : typeName;
+
         logger.info(`[MCP-JIRA] Real HTTP: fetched ${issueKey}`);
         return {
           id: data.key,
           key: data.key,
           title: data.fields.summary,
           description,
-          status: data.fields.status.name,
-          priority: data.fields.priority.name,
-          category: data.fields.issuetype.name.toUpperCase(),
+          status: data.fields.status?.name || 'Open',
+          priority: data.fields.priority?.name || 'Medium',
+          category,
           reporter: '',
           created: new Date().toISOString(),
         };

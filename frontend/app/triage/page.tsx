@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePipeline } from "@/lib/usePipeline";
-import { Play, Square, Clock, Zap, Terminal } from "lucide-react";
+import { Play, Square, Clock, Zap, Terminal, Radio, Sparkles, CheckCircle2 } from "lucide-react";
 
 const STATUS_CONFIG: Record<string, { color: string; dotColor: string }> = {
   STARTED:   { color: "text-blue-500",    dotColor: "bg-blue-500" },
@@ -17,15 +17,51 @@ const STATUS_CONFIG: Record<string, { color: string; dotColor: string }> = {
 };
 
 const PRESETS = [
-  { t: "VPN Connection & DNS Cache Failure (Real Host Auto-Fix)", d: "User cannot connect to corporate VPN. Remote Access service (RasMan) and DNS cache degraded on local laptop.", emoji: "⚡" },
-  { t: "Double Charged Billing Dispute", d: "Customer billed twice for invoice #INV-9921. Urgent refund.", emoji: "💳" },
-  { t: "SSL Certificate Expiry — api.company.com", d: "SSL cert expires in 3 days. Auto-renewal failed.", emoji: "🔒" },
-  { t: "Database High Latency & Drop Warning", d: "Production DB latency spiked above 500ms, us-east-1.", emoji: "🗄️" },
+  { key: "JIRA-101", t: "VPN Connection & DNS Cache Failure (Real Host Auto-Fix)", d: "User cannot connect to corporate VPN. Remote Access service (RasMan) and DNS cache degraded on local laptop.", emoji: "⚡" },
+  { key: "JIRA-102", t: "Double Charged Billing Dispute", d: "Customer billed twice for invoice #INV-9921. Urgent refund required.", emoji: "💳" },
+  { key: "JIRA-103", t: "SSL Certificate Expiry — api.company.com", d: "SSL cert expires in 3 days. Auto-renewal failed.", emoji: "🔒" },
+  { key: "JIRA-104", t: "Database High Latency & Drop Warning", d: "Production DB latency spiked above 500ms, us-east-1.", emoji: "🗄️" },
+];
+
+const JIRA_LIVE_ISSUES = [
+  { key: "SCRUM-5", t: "VPN Connection & DNS Cache Failure", d: "User cannot connect to corporate VPN. Remote Access service (RasMan) and DNS cache degraded on local laptop." },
+  { key: "SCRUM-1", t: "Task 1", d: "Initial onboarding setup and dev environment configuration." },
+  { key: "SCRUM-2", t: "Task 2", d: "Core API authentication and session token verification." },
+];
+
+const IT_TEMPLATES = [
+  {
+    name: "⚡ VPN & DNS (Host Auto-Fix)",
+    key: "SCRUM-5",
+    t: "VPN Connection & DNS Cache Failure",
+    d: "User cannot connect to corporate VPN. Remote Access service (RasMan) and DNS cache degraded on local laptop.",
+  },
+  {
+    name: "💳 Double Charge (Finance Risk)",
+    key: "JIRA-BILL-99",
+    t: "Double Charged Billing Dispute #INV-8891",
+    d: "Customer was charged $1,200 twice for invoice #INV-8891. Requesting immediate credit card reversal.",
+  },
+  {
+    name: "🔐 AD Account Lockout",
+    key: "JIRA-AUTH-42",
+    t: "Active Directory Account Locked Out",
+    d: "User user@nexagent.ai exceeded 5 invalid login attempts on Okta SSO. Unlock account and issue temporary PIN.",
+  },
+  {
+    name: "⚠️ Staging Spooler Load",
+    key: "JIRA-DEV-12",
+    t: "Print Spooler high CPU on staging print-server",
+    d: "Non-critical CPU spike on dev spooler worker pool. Staging environment only, zero customer impact.",
+  },
 ];
 
 export default function TriagePage() {
-  const [title, setTitle] = useState("VPN Access Password Reset Request");
-  const [description, setDescription] = useState("User cannot access VPN after password expiry.");
+  const [isLiveJira, setIsLiveJira] = useState(false);
+  const [issueKey, setIssueKey] = useState("SCRUM-5");
+  const [title, setTitle] = useState(PRESETS[0].t);
+  const [description, setDescription] = useState(PRESETS[0].d);
+
   const { run, stop, streaming, steps, rawLog, result, error } = usePipeline();
   const terminalBodyRef = useRef<HTMLDivElement>(null);
 
@@ -48,33 +84,172 @@ export default function TriagePage() {
             <p className="text-xs text-muted-foreground">
               ITIL-classified triage: fetch → classify → KB search → dual-LLM → guardrails → CCEP → auto-resolve or escalate
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+            {/* Mode Selector */}
+            <div className="flex items-center gap-4 text-xs">
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium">
+                <input
+                  type="radio"
+                  name="triage-mode"
+                  checked={!isLiveJira}
+                  onChange={() => {
+                    setIsLiveJira(false);
+                    setIssueKey(PRESETS[0].key);
+                    setTitle(PRESETS[0].t);
+                    setDescription(PRESETS[0].d);
+                  }}
+                  disabled={streaming}
+                  className="text-primary"
+                />
+                Demo Scenarios
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-blue-600 dark:text-blue-400">
+                <input
+                  type="radio"
+                  name="triage-mode"
+                  checked={isLiveJira}
+                  onChange={() => {
+                    setIsLiveJira(true);
+                    setIssueKey("SCRUM-5");
+                    setTitle(JIRA_LIVE_ISSUES[0].t);
+                    setDescription(JIRA_LIVE_ISSUES[0].d);
+                  }}
+                  disabled={streaming}
+                  className="text-primary"
+                />
+                <Radio size={12} className="animate-pulse" />
+                Live Jira Cloud Issue / Custom Ticket Input (akshatraikar11.atlassian.net)
+              </label>
+            </div>
+
+            {!isLiveJira ? (
+              /* Quick scenario presets */
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {PRESETS.map((s) => (
+                  <button
+                    key={s.t}
+                    onClick={() => {
+                      setIssueKey(s.key);
+                      setTitle(s.t);
+                      setDescription(s.d);
+                    }}
+                    disabled={streaming}
+                    className={`glass-card-interactive rounded-xl p-2.5 text-left group disabled:opacity-50 disabled:pointer-events-none border transition-colors ${
+                      title === s.t ? "border-primary/50 bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <span className="text-lg">{s.emoji}</span>
+                    <p className="text-[11px] font-medium text-foreground mt-1 line-clamp-2 leading-tight">{s.t}</p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              /* Live Jira & Real Input Box */
+              <div className="space-y-2 p-3 rounded-xl border border-blue-500/30 bg-blue-500/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                    <Sparkles size={12} />
+                    <span>Real Jira Cloud Tickets & Templates:</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <CheckCircle2 size={12} className="text-emerald-500" />
+                    <span>Jira Cloud & Slack #it-support ready</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {JIRA_LIVE_ISSUES.map((issue) => (
+                    <button
+                      key={issue.key}
+                      type="button"
+                      disabled={streaming}
+                      onClick={() => {
+                        setIssueKey(issue.key);
+                        setTitle(issue.t);
+                        setDescription(issue.d);
+                      }}
+                      className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                        issueKey === issue.key
+                          ? "bg-blue-600 text-white border-blue-600 font-semibold"
+                          : "bg-background/80 border-blue-500/30 hover:bg-blue-500/10 text-foreground"
+                      }`}
+                    >
+                      {issue.key} — {issue.t}
+                    </button>
+                  ))}
+                  {IT_TEMPLATES.slice(1).map((tmpl) => (
+                    <button
+                      key={tmpl.name}
+                      type="button"
+                      disabled={streaming}
+                      onClick={() => {
+                        setIssueKey(tmpl.key);
+                        setTitle(tmpl.t);
+                        setDescription(tmpl.d);
+                      }}
+                      className="text-[11px] px-2.5 py-1 rounded-md bg-background/80 border border-blue-500/30 hover:bg-blue-500/10 text-foreground transition-colors"
+                    >
+                      {tmpl.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Ticket / Issue Key</label>
+                <Input
+                  value={issueKey}
+                  onChange={(e) => setIssueKey(e.target.value)}
+                  disabled={streaming}
+                  placeholder="e.g. SCRUM-5"
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-3">
                 <label className="text-xs font-medium text-muted-foreground">Ticket Title</label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={streaming} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Description</label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} disabled={streaming} />
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  disabled={streaming}
+                  placeholder="e.g. VPN Access Password Reset Request"
+                />
               </div>
             </div>
-            {/* Quick scenario presets */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {PRESETS.map((s) => (
-                <button key={s.t} onClick={() => { setTitle(s.t); setDescription(s.d); }} disabled={streaming}
-                  className="glass-card-interactive rounded-xl p-2.5 text-left group disabled:opacity-50 disabled:pointer-events-none">
-                  <span className="text-lg">{s.emoji}</span>
-                  <p className="text-[11px] font-medium text-foreground mt-1 line-clamp-2 leading-tight">{s.t}</p>
-                </button>
-              ))}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Description</label>
+              <Input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={streaming}
+                placeholder="User problem details, diagnostic output..."
+              />
             </div>
+
             {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 animate-fade-in">{error}</div>}
             <div className="flex gap-2">
-              <Button size="sm" disabled={streaming} loading={streaming}
-                onClick={() => run({ pipelineType: "TICKET_TRIAGE", ticketTitle: title, ticketDescription: description, actionType: "jira_comment" })}>
+              <Button
+                size="sm"
+                disabled={streaming}
+                loading={streaming}
+                onClick={() =>
+                  run({
+                    pipelineType: "TICKET_TRIAGE",
+                    externalTicketId: issueKey,
+                    ticketTitle: title,
+                    ticketDescription: description,
+                    actionType: "jira_comment",
+                  })
+                }
+              >
                 <Play size={13} className="mr-1.5" />Run Pipeline
               </Button>
-              {streaming && <Button size="sm" variant="outline" onClick={stop}><Square size={13} className="mr-1.5" />Stop</Button>}
+              {streaming && (
+                <Button size="sm" variant="outline" onClick={stop}>
+                  <Square size={13} className="mr-1.5" />Stop
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -125,7 +300,7 @@ export default function TriagePage() {
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Decision</span>
                     <Badge variant={result.decision === "AUTO_RESOLVE" ? "success" : "warning"}>
-                      {result.decision}
+                      {result.decision === "AUTO_RESOLVE" ? "🟢 AUTO-RESOLVED" : "🚨 ESCALATE TO HUMAN"}
                     </Badge>
                   </div>
                   <div className="flex justify-between items-center">
@@ -147,7 +322,7 @@ export default function TriagePage() {
                     )}
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Run ID</span>
+                    <span className="text-sm text-muted-foreground">Ticket / Run ID</span>
                     <span className="text-xs font-mono text-muted-foreground">{result.runId.slice(0, 18)}…</span>
                   </div>
                   {/* CCEP score bar */}
