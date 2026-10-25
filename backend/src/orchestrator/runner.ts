@@ -266,6 +266,8 @@ export async function runPipeline(
     data: {
       decision: context.decision,
       ccepScore: context.ccepScore,
+      threshold: context.threshold,
+      isMockLLM: (context.metadata?.['isMockLLM'] as boolean | undefined) ?? false,
       liveHostTelemetry:
         context.metadata?.liveHostTelemetry ||
         (context.stepResults?.['execute_or_escalate'] as { liveHostTelemetry?: unknown })?.liveHostTelemetry,

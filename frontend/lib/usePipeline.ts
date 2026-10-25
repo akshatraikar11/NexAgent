@@ -89,12 +89,16 @@ export function usePipeline() {
           const runAny = run as unknown as {
             decision: string;
             ccepScore: number;
+            threshold?: number;
+            isMockLLM?: boolean;
             liveHostTelemetry?: LiveHostTelemetry;
           };
           setResult({
             runId,
             decision: runAny.decision ?? "PENDING",
             ccepScore: runAny.ccepScore ?? 0,
+            threshold: runAny.threshold,
+            isMockLLM: runAny.isMockLLM ?? false,
             status: run.status,
             liveHostTelemetry: runAny.liveHostTelemetry,
           });
@@ -169,12 +173,16 @@ export function usePipeline() {
           const payload = evt.data as {
             decision?: string;
             ccepScore?: number;
+            threshold?: number;
+            isMockLLM?: boolean;
             liveHostTelemetry?: LiveHostTelemetry;
           } | undefined;
           setResult({
             runId,
             decision: payload?.decision ?? "AUTO_RESOLVE",
             ccepScore: payload?.ccepScore ?? 0,
+            threshold: payload?.threshold,
+            isMockLLM: payload?.isMockLLM ?? false,
             status: "COMPLETED",
             liveHostTelemetry: payload?.liveHostTelemetry,
           });
