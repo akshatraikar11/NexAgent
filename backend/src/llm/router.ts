@@ -52,7 +52,7 @@ export async function generateDualLLMResponse(
 
   try {
     const geminiAi = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const geminiModel = geminiAi.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const geminiModel = geminiAi.getGenerativeModel({ model: 'gemini-flash-lite-latest' });
     const fullPrompt = `${prompt}\n${CONFIDENCE_INSTRUCTION}`;
 
     let geminiText = '';
