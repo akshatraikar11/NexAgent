@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useLayoutEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -39,14 +40,32 @@ const navEntries: NavEntry[] = [
   { href: "/onboarding",          label: "Setup Wizard",    icon: Sparkles },
 ];
 
+// Persistent module-level scroll position across route changes
+let savedSidebarScrollTop = 0;
+
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const navRef = useRef<HTMLElement>(null);
+
+  // Restore scroll position after client route change
+  useLayoutEffect(() => {
+    if (navRef.current && savedSidebarScrollTop > 0) {
+      navRef.current.scrollTop = savedSidebarScrollTop;
+    }
+  }, [pathname]);
+
+  const handleNavScroll = (e: React.UIEvent<HTMLElement>) => {
+    savedSidebarScrollTop = e.currentTarget.scrollTop;
+  };
 
   return (
-    <aside className="flex flex-col w-64 min-h-screen sidebar-light shrink-0 z-20">
+    <aside className={cn(
+      "flex flex-col w-64 sidebar-light shrink-0 z-20 select-none",
+      onClose ? "h-full" : "h-screen sticky top-0"
+    )}>
       {/* Brand Header */}
-      <div className="px-5 py-5 border-b border-slate-200/80">
+      <div className="px-5 py-5 border-b border-slate-200/80 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center shadow-sm">
@@ -83,11 +102,15 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <nav
+        ref={navRef}
+        onScroll={handleNavScroll}
+        className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overscroll-contain"
+      >
         {navEntries.map((item, idx) => {
           if ('separator' in item && item.separator) {
             return (
-              <div key={`sep-${idx}`} className="pt-5 pb-2 px-2.5 section-separator">
+              <div key={`sep-${idx}`} className="pt-4 pb-1.5 px-2.5 section-separator">
                 <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
                   {item.separator}
                 </p>
@@ -103,9 +126,10 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             <Link
               key={navItem.href}
               href={navItem.href}
+              scroll={false}
               onClick={onClose}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
+                "flex items-center gap-3 px-3 h-9 rounded-xl text-xs font-medium border border-transparent transition-colors duration-150 group",
                 active
                   ? "nav-active-bar font-semibold"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
@@ -118,7 +142,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                   active ? "text-white" : "text-slate-500 group-hover:text-slate-900"
                 )}
               />
-              <span>{navItem.label}</span>
+              <span className="truncate">{navItem.label}</span>
             </Link>
           );
         })}
