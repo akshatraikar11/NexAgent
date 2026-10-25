@@ -17,6 +17,7 @@ import { slaRouter } from './routes/sla.routes.js';
 import { correlationRouter } from './routes/correlation.routes.js';
 import { notificationsRouter } from './routes/notifications.routes.js';
 import { analyticsRouter } from './routes/analytics.routes.js';
+import { webhookRouter } from './routes/webhook.routes.js';
 import { initLangfuseTracing } from './observability/langfuse.js';
 import { config } from './config/index.js';
 import { isDatabaseConnected } from './db/client.js';
@@ -88,6 +89,7 @@ app.use('/sla', slaRouter);
 app.use('/correlation', correlationRouter);
 app.use('/notifications', notificationsRouter);
 app.use('/analytics', analyticsRouter);
+app.use('/webhooks', webhookRouter);
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use(globalErrorHandler);

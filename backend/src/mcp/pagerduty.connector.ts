@@ -61,6 +61,7 @@ export class PagerDutyConnector {
       Authorization: `Token token=${this.token}`,
       Accept: 'application/vnd.pagerduty+json;version=2',
       'Content-Type': 'application/json',
+      From: process.env.PAGERDUTY_FROM_EMAIL || process.env.JIRA_EMAIL || 'admin@nexagent.ai',
     };
   }
 

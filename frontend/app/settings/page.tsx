@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { api, type Settings } from "@/lib/api";
-import { Save, RotateCcw } from "lucide-react";
+import { Save, RotateCcw, Radio, CheckCircle2, Copy, Shield, Activity } from "lucide-react";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -15,17 +15,19 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Form state
-  const [threshold, setThreshold] = useState("0.34");
-  const [w1, setW1] = useState("0.35");
-  const [w2, setW2] = useState("0.25");
-  const [w3, setW3] = useState("0.20");
-  const [w4, setW4] = useState("0.20");
+  const [threshold, setThreshold] = useState("0.32");
+  const [w1, setW1] = useState("0.2562");
+  const [w2, setW2] = useState("0.2260");
+  const [w3, setW3] = useState("0.1677");
+  const [w4, setW4] = useState("0.3502");
   const [revMap, setRevMap] = useState("{}");
 
   useEffect(() => {
-    api.settings.get()
+    api.settings
+      .get()
       .then((s) => {
         setSettings(s);
         setThreshold(String(s.ccepThreshold));
@@ -59,15 +61,14 @@ export default function SettingsPage() {
       } catch {
         throw new Error("Invalid JSON in Reversibility Map");
       }
-
-      const wSum = parseFloat(w1) + parseFloat(w2) + parseFloat(w3) + parseFloat(w4);
-      if (Math.abs(wSum - 1.0) > 0.01) {
-        throw new Error(`Weights must sum to 1.0 (current sum: ${wSum.toFixed(4)})`);
-      }
-
       const updated = await api.settings.update({
         ccepThreshold: parseFloat(threshold),
-        weights: { w1: parseFloat(w1), w2: parseFloat(w2), w3: parseFloat(w3), w4: parseFloat(w4) },
+        weights: {
+          w1: parseFloat(w1),
+          w2: parseFloat(w2),
+          w3: parseFloat(w3),
+          w4: parseFloat(w4),
+        },
         reversibilityMap: revMapParsed,
       });
       setSettings(updated);
@@ -80,42 +81,153 @@ export default function SettingsPage() {
     }
   }
 
-  const wSum = [w1, w2, w3, w4].reduce((s, v) => s + parseFloat(v || "0"), 0);
-  const wSumOk = Math.abs(wSum - 1.0) < 0.01;
+  const copyUrl = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const wSum = parseFloat(w1 || "0") + parseFloat(w2 || "0") + parseFloat(w3 || "0") + parseFloat(w4 || "0");
+  const wSumOk = Math.abs(wSum - 1.0) < 0.005;
 
   return (
     <AppShell>
-      <div className="space-y-6 max-w-2xl">
-        {error && <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">{error}</p>}
-        {saved && <p className="text-emerald-400 text-sm bg-emerald-500/10 border border-emerald-500/20 rounded-md px-3 py-2">Settings saved successfully.</p>}
+      <div className="space-y-6 max-w-5xl">
+        {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600">{error}</div>}
+        {saved && <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-700">Settings saved successfully.</div>}
 
         {loading ? (
-          <p className="text-muted-foreground text-sm">Loading settings…</p>
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-40 rounded-xl shimmer" />
+            ))}
+          </div>
         ) : (
           <>
-            {/* CCEP Threshold */}
+            {/* Inbound Webhooks Hub */}
             <Card>
-              <CardHeader><CardTitle>CCEP Escalation Threshold</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Radio size={16} className="text-primary animate-pulse" />
+                    Inbound Webhook Listeners (Zero-Click Triggering)
+                  </CardTitle>
+                  <Badge variant="success">Dispatcher Active</Badge>
+                </div>
+              </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  If CCEP score ≥ threshold, the decision is ESCALATE. Range: 0.0 – 1.0.
+                  Connect these webhooks to trigger automated pipelines in real time without opening the browser.
                 </p>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="number" step="0.01" min="0" max="1"
-                    value={threshold}
-                    onChange={(e) => setThreshold(e.target.value)}
-                    className="w-32"
-                  />
-                  <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${parseFloat(threshold) * 100}%` }} />
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                  {/* GitHub */}
+                  <div className="p-3 bg-secondary/40 border border-border/50 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold">GitHub Webhook</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-mono">
+                        Active
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Auto-triggers MergeGate on PRs & CI Triage on test failures.</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <code className="text-[10px] bg-background/80 px-2 py-1 rounded border border-border flex-1 font-mono truncate">
+                        http://localhost:3001/webhooks/github
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => copyUrl("http://localhost:3001/webhooks/github", "gh")}
+                      >
+                        {copiedKey === "gh" ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                      </Button>
+                    </div>
                   </div>
-                  <span className="text-sm font-semibold w-12 text-right">{parseFloat(threshold).toFixed(2)}</span>
+
+                  {/* Sentry */}
+                  <div className="p-3 bg-secondary/40 border border-border/50 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold">Sentry Alert Webhook</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-mono">
+                        Active
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Auto-triggers Incident Response on production exceptions.</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <code className="text-[10px] bg-background/80 px-2 py-1 rounded border border-border flex-1 font-mono truncate">
+                        http://localhost:3001/webhooks/sentry
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => copyUrl("http://localhost:3001/webhooks/sentry", "sentry")}
+                      >
+                        {copiedKey === "sentry" ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Jira */}
+                  <div className="p-3 bg-secondary/40 border border-border/50 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold">Jira Cloud Webhook</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-mono">
+                        Active
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Auto-triggers Ticket Triage & Host auto-remediation on new issues.</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <code className="text-[10px] bg-background/80 px-2 py-1 rounded border border-border flex-1 font-mono truncate">
+                        http://localhost:3001/webhooks/jira
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => copyUrl("http://localhost:3001/webhooks/jira", "jira")}
+                      >
+                        {copiedKey === "jira" ? <CheckCircle2 size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* CCEP Weights */}
+            {/* Threshold & Guardrails */}
+            <Card>
+              <CardHeader><CardTitle>CCEP Global Escalation Threshold</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Actions with CCEP score below this threshold are executed automatically. Higher scores escalate to human operators.
+                </p>
+                <div className="flex items-center gap-4">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={threshold}
+                    onChange={(e) => setThreshold(e.target.value)}
+                    className="w-32"
+                  />
+                  <div className="flex-1 space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>0.00 (Strict Human Sign-off)</span>
+                      <span>Current: {parseFloat(threshold || "0").toFixed(2)}</span>
+                      <span>1.00 (Fully Autonomous)</span>
+                    </div>
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${parseFloat(threshold || "0") * 100}%` }} />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Weights */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -136,8 +248,15 @@ export default function SettingsPage() {
                   <div key={label} className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-xs text-muted-foreground">{label}</label>
-                      <Input type="number" step="0.01" min="0" max="1" value={value}
-                        onChange={(e) => set(e.target.value)} className="w-24 h-7 text-xs" />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="1"
+                        value={value}
+                        onChange={(e) => set(e.target.value)}
+                        className="w-24 h-7 text-xs"
+                      />
                     </div>
                     <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                       <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${parseFloat(value || "0") * 100}%` }} />
@@ -153,7 +272,7 @@ export default function SettingsPage() {
               <CardContent className="space-y-2">
                 <p className="text-xs text-muted-foreground">JSON map of action_type → reversibility weight (0.0–1.0).</p>
                 <textarea
-                  className="w-full h-40 bg-secondary/50 border border-border rounded-md p-3 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full h-36 bg-secondary/50 border border-border rounded-md p-3 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-ring"
                   value={revMap}
                   onChange={(e) => setRevMap(e.target.value)}
                 />
@@ -162,10 +281,12 @@ export default function SettingsPage() {
 
             <div className="flex gap-2">
               <Button onClick={save} disabled={saving || !wSumOk}>
-                <Save size={14} className="mr-1.5" />{saving ? "Saving…" : "Save Settings"}
+                <Save size={14} className="mr-1.5" />
+                {saving ? "Saving…" : "Save Settings"}
               </Button>
               <Button variant="outline" onClick={reset}>
-                <RotateCcw size={14} className="mr-1.5" />Reset
+                <RotateCcw size={14} className="mr-1.5" />
+                Reset
               </Button>
             </div>
             {settings && (
