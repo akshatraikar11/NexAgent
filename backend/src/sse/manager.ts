@@ -27,7 +27,6 @@ class SSEManager {
     const session = await createSession(req, res);
     const channel = this.getOrCreateChannel(runId);
     channel.register(session);
-    this.globalChannel.register(session);
 
     session.on('disconnected', () => {
       logger.info(`[SSE] Session disconnected for runId: ${runId}`);
