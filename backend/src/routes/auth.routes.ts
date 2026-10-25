@@ -128,6 +128,32 @@ authRouter.post('/login', loginLimiter, async (req: AuthenticatedRequest, res: R
   }
 });
 
+authRouter.post('/dev-session', async (_req, res: Response, next) => {
+  try {
+    if (config.nodeEnv === 'production') {
+      res.status(403).json({ error: 'FORBIDDEN', message: 'Dev session disabled in production' });
+      return;
+    }
+    const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+    if (!admin) {
+      res.status(404).json({ error: 'NO_ADMIN_FOUND', message: 'Admin account not seeded' });
+      return;
+    }
+    const token = jwt.sign(
+      { userId: admin.id, email: admin.email, role: admin.role },
+      config.jwtSecret,
+      { expiresIn: '1h' }
+    );
+    res.cookie(AUTH_COOKIE, token, cookieOptions());
+    res.json({
+      token,
+      user: { id: admin.id, email: admin.email, name: admin.name, role: admin.role },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 authRouter.post('/logout', (_req, res: Response) => {
   res.clearCookie(AUTH_COOKIE, { httpOnly: true, path: '/' });
   res.json({ success: true });

@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function autoLoginAdmin() {
       try {
-        const res = await api.auth.login("admin@nexagent.dev", "NexAgent_Dev_2026!");
+        const res = await api.auth.devSession();
         setToken(res.token);
         setTokenState(res.token);
         setUser(res.user);

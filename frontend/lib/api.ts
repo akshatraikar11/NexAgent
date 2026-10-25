@@ -50,21 +50,20 @@ async function request<T>(
 ): Promise<T> {
   let token = getToken();
 
-  // If no token exists and in browser, auto-authenticate with dev admin credentials
-  if (!token && typeof window !== "undefined" && !path.startsWith("/auth/login")) {
+  // If no token exists and in browser, auto-authenticate with dev session
+  if (!token && typeof window !== "undefined" && !path.startsWith("/auth/")) {
     try {
-      const loginRes = await fetch(`${BASE}/auth/login`, {
+      const devRes = await fetch(`${BASE}/auth/dev-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "admin@nexagent.dev", password: "NexAgent_Dev_2026!" }),
       });
-      if (loginRes.ok) {
-        const data = await loginRes.json();
+      if (devRes.ok) {
+        const data = await devRes.json();
         setToken(data.token);
         token = data.token;
       }
     } catch {
-      // ignore network errors during auto-login
+      // ignore network errors during auto-session
     }
   }
 
@@ -80,16 +79,15 @@ async function request<T>(
     credentials: "include", // Send httpOnly session cookies automatically
   });
 
-  // If 401 Unauthorized, automatically refresh admin session and retry once
+  // If 401 Unauthorized, automatically refresh session and retry once
   if (res.status === 401 && !isRetry && !path.startsWith("/auth/")) {
     try {
-      const loginRes = await fetch(`${BASE}/auth/login`, {
+      const devRes = await fetch(`${BASE}/auth/dev-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "admin@nexagent.dev", password: "NexAgent_Dev_2026!" }),
       });
-      if (loginRes.ok) {
-        const data = await loginRes.json();
+      if (devRes.ok) {
+        const data = await devRes.json();
         setToken(data.token);
         return request<T>(path, options, true);
       }
@@ -108,6 +106,11 @@ async function request<T>(
 // ── Auth ─────────────────────────────────────────────────────────────────────
 export const api = {
   auth: {
+    devSession: () =>
+      request<{ token: string; user: { id: string; email: string; name: string; role: string } }>(
+        "/auth/dev-session",
+        { method: "POST" }
+      ),
     login: (email: string, password: string) =>
       request<{ token: string; user: { id: string; email: string; name: string; role: string } }>(
         "/auth/login",
