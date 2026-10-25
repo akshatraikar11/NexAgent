@@ -26,12 +26,17 @@ export const INCIDENT_RESPONSE_STEPS: Step[] = [
       const alertId = ctx.alertId || 'INC-8891';
       const alert = await sentryConnector.parseAlert(alertId);
 
-      ctx.alertId = alert.alertId;
-      ctx.ticketTitle = alert.title;
-      ctx.ticketDescription = alert.description;
+      ctx.alertId = ctx.alertId || alert.alertId;
+      ctx.ticketTitle = ctx.ticketTitle || alert.title;
+      ctx.ticketDescription = ctx.ticketDescription || alert.description;
       ctx.category = 'INFRASTRUCTURE';
-      ctx.metadata['sentryAlert'] = alert;
-      ctx.stepResults['parse_alert'] = alert;
+      ctx.metadata['sentryAlert'] = {
+        ...alert,
+        alertId: ctx.alertId,
+        title: ctx.ticketTitle,
+        description: ctx.ticketDescription,
+      };
+      ctx.stepResults['parse_alert'] = ctx.metadata['sentryAlert'];
 
       // Upsert INFRASTRUCTURE category so override feedback loop accumulates here too
       try {
@@ -259,6 +264,16 @@ export const INCIDENT_RESPONSE_STEPS: Step[] = [
           `[${severity}] Automated summary for ${ctx.alertId}: ${safeResponse}`
         );
         ctx.stepResults['execute_or_escalate'] = { action: 'INCIDENT_SUMMARY_POSTED', slackResult };
+        if (ctx.runId) {
+          const { sseManager } = await import('../sse/manager.js');
+          sseManager.emitEvent(ctx.runId, {
+            runId: ctx.runId,
+            stepName: 'execute_or_escalate',
+            status: 'COMPLETED',
+            timestamp: new Date().toISOString(),
+            data: { log: `Automated incident summary posted to Slack (#sre-incidents)` },
+          });
+        }
       } else {
         const team = (ctx.metadata['responseTeam'] as string[])?.join(', ') || 'SRE On-Call';
 
@@ -284,6 +299,16 @@ export const INCIDENT_RESPONSE_STEPS: Step[] = [
           `INCIDENT ESCALATED to ${team} (CCEP: ${ctx.ccepScore?.toFixed(3)}): ${ctx.ticketTitle}${pdIncidentId ? ` | PD: ${pdIncidentId}` : ''}`
         );
         ctx.stepResults['execute_or_escalate'] = { action: 'ONCALL_ESCALATION_HELD', slackResult, pdIncidentId };
+        if (ctx.runId) {
+          const { sseManager } = await import('../sse/manager.js');
+          sseManager.emitEvent(ctx.runId, {
+            runId: ctx.runId,
+            stepName: 'execute_or_escalate',
+            status: 'COMPLETED',
+            timestamp: new Date().toISOString(),
+            data: { log: `🚨 Critical SRE alert dispatched to Slack (#sre-oncall)` },
+          });
+        }
       }
 
       try {
