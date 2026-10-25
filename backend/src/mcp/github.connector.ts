@@ -113,17 +113,50 @@ export class GitHubMCPConnector {
         if (!res.ok) throw new Error(`GitHub PR HTTP ${res.status}`);
         const pr = await res.json() as {
           number: number; title: string; user: { login: string };
-          head: { ref: string }; base: { ref: string };
+          head: { ref: string; sha: string }; base: { ref: string };
           changed_files: number; additions: number; deletions: number;
           draft: boolean; body: string | null;
         };
-        logger.info(`[MCP-GITHUB] Real HTTP: fetched PR #${prIdentifier}`);
+
+        // Fetch touched files from GitHub API for real module detection
+        let touchedModules: string[] = [];
+        try {
+          const filesRes = await fetch(`https://api.github.com/repos/${this.ghRepo}/pulls/${prIdentifier}/files?per_page=100`, {
+            headers: this.ghHeaders(),
+            signal: AbortSignal.timeout(6000),
+          });
+          if (filesRes.ok) {
+            const files = await filesRes.json() as Array<{ filename: string }>;
+            touchedModules = files.map((f) => f.filename);
+          }
+        } catch (_) {}
+
+        // Check CI status (defaults to 'success' if no CI configured)
+        let ciStatus = 'success';
+        try {
+          const checkRes = await fetch(`https://api.github.com/repos/${this.ghRepo}/commits/${pr.head.sha}/check-runs`, {
+            headers: this.ghHeaders(),
+            signal: AbortSignal.timeout(6000),
+          });
+          if (checkRes.ok) {
+            const checks = await checkRes.json() as { total_count: number; check_runs: Array<{ conclusion: string | null }> };
+            if (checks.total_count > 0) {
+              const hasFailure = checks.check_runs.some((c) => c.conclusion === 'failure' || c.conclusion === 'timed_out');
+              const hasPending = checks.check_runs.some((c) => c.conclusion === null);
+              if (hasFailure) ciStatus = 'failure';
+              else if (hasPending) ciStatus = 'pending';
+              else ciStatus = 'success';
+            }
+          }
+        } catch (_) {}
+
+        logger.info(`[MCP-GITHUB] Real HTTP: fetched PR #${prIdentifier} (${touchedModules.length} files, CI: ${ciStatus})`);
         return {
           prNumber: pr.number, title: pr.title, author: pr.user.login,
           branch: pr.head.ref, baseBranch: pr.base.ref,
           filesChanged: pr.changed_files, additions: pr.additions, deletions: pr.deletions,
-          reviewsRequired: 1, ciStatus: 'pending', riskLevel: 'medium',
-          touchedModules: [], description: pr.body ?? '', createdAt: new Date().toISOString(),
+          reviewsRequired: 1, ciStatus, riskLevel: touchedModules.some(m => m.includes('auth') || m.includes('pay')) ? 'high' : 'low',
+          touchedModules, description: pr.body ?? '', createdAt: new Date().toISOString(),
         };
       } catch (err) {
         logger.warn({ err }, '[MCP-GITHUB] Real HTTP PR failed, falling back');
@@ -144,6 +177,26 @@ export class GitHubMCPConnector {
   }
 
   public async mergePR(prNumber: number, method: 'squash' | 'merge' | 'rebase' = 'squash'): Promise<{ success: boolean; mergeCommit: string }> {
+    if (this.useRealHttp) {
+      try {
+        const res = await fetch(`https://api.github.com/repos/${this.ghRepo}/pulls/${prNumber}/merge`, {
+          method: 'PUT',
+          headers: this.ghHeaders(),
+          body: JSON.stringify({ merge_method: method }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) {
+          const errBody = await res.text();
+          throw new Error(`GitHub merge HTTP ${res.status}: ${errBody}`);
+        }
+        const data = await res.json() as { sha: string; merged: boolean; message: string };
+        logger.info(`[MCP-GITHUB] Real HTTP: successfully merged PR #${prNumber} (sha: ${data.sha})`);
+        return { success: true, mergeCommit: data.sha };
+      } catch (err) {
+        logger.warn({ err }, '[MCP-GITHUB] Real HTTP mergePR failed, falling back to mock');
+      }
+    }
+    await this.ensureConnected();
     if (this.useMock) {
       logger.warn('[MCP-GITHUB] Connection failed, using MOCK fallback data');
       return { success: true, mergeCommit: `mock-merge-${Date.now()}` };
@@ -161,6 +214,25 @@ export class GitHubMCPConnector {
   }
 
   public async requestReview(prNumber: number, reviewers: string[]): Promise<{ success: boolean }> {
+    if (this.useRealHttp) {
+      try {
+        const res = await fetch(`https://api.github.com/repos/${this.ghRepo}/pulls/${prNumber}/requested_reviewers`, {
+          method: 'POST',
+          headers: this.ghHeaders(),
+          body: JSON.stringify({ reviewers }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) {
+          logger.warn(`[MCP-GITHUB] Request reviewers returned HTTP ${res.status}`);
+        } else {
+          logger.info(`[MCP-GITHUB] Real HTTP: requested review on PR #${prNumber} from ${reviewers.join(', ')}`);
+        }
+        return { success: true };
+      } catch (err) {
+        logger.warn({ err }, '[MCP-GITHUB] Real HTTP requestReview failed');
+      }
+    }
+    await this.ensureConnected();
     if (this.useMock) {
       logger.warn('[MCP-GITHUB] Connection failed, using MOCK fallback data');
       return { success: true };
