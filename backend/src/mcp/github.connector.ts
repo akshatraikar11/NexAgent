@@ -280,6 +280,68 @@ export class GitHubMCPConnector {
   // ── Build ─────────────────────────────────────────────────────────────────
 
   public async getBuild(buildId: string): Promise<GitHubBuildMock> {
+    if (this.useRealHttp) {
+      try {
+        const cleanId = buildId.replace(/^BUILD-/, '');
+        const res = await fetch(`https://api.github.com/repos/${this.ghRepo}/actions/runs/${cleanId}`, {
+          headers: this.ghHeaders(),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (res.ok) {
+          const run = await res.json() as {
+            id: number; name: string; path: string; head_branch: string; head_sha: string;
+            conclusion: string | null; status: string; run_started_at: string;
+            triggering_actor: { login: string };
+          };
+
+          // Fetch jobs to extract failing step & error details
+          let failedStep = 'Build execution failed';
+          let errorType: 'transient_infra' | 'code_error' | 'config_error' | 'dependency_error' = 'code_error';
+          try {
+            const jobsRes = await fetch(`https://api.github.com/repos/${this.ghRepo}/actions/runs/${cleanId}/jobs`, {
+              headers: this.ghHeaders(),
+              signal: AbortSignal.timeout(6000),
+            });
+            if (jobsRes.ok) {
+              const jobsData = await jobsRes.json() as { jobs: Array<{ steps?: Array<{ name: string; conclusion: string | null }> }> };
+              const failedJob = jobsData.jobs.find(j => j.steps?.some(s => s.conclusion === 'failure'));
+              const s = failedJob?.steps?.find(st => st.conclusion === 'failure');
+              if (s) {
+                failedStep = `Step failed: ${s.name}`;
+                const n = s.name.toLowerCase();
+                if (n.includes('timeout') || n.includes('docker') || n.includes('network') || n.includes('registry')) {
+                  errorType = 'transient_infra';
+                } else if (n.includes('env') || n.includes('config') || n.includes('secret')) {
+                  errorType = 'config_error';
+                } else if (n.includes('install') || n.includes('deps')) {
+                  errorType = 'dependency_error';
+                } else {
+                  errorType = 'code_error';
+                }
+              }
+            }
+          } catch (_) {}
+
+          logger.info(`[MCP-GITHUB] Real HTTP: fetched Action run #${cleanId} (${failedStep}, errorType: ${errorType})`);
+          return {
+            buildId: `BUILD-${run.id}`,
+            workflow: run.path.split('/').pop() || run.name,
+            branch: run.head_branch,
+            commit: run.head_sha.slice(0, 7),
+            status: run.conclusion === 'success' ? 'success' : 'failure',
+            errorType,
+            errorMessage: `${failedStep} in GitHub Actions run #${cleanId}`,
+            duration: 45,
+            environment: run.head_branch === 'main' ? 'production' : 'staging',
+            triggeredBy: run.triggering_actor?.login || 'developer',
+            startedAt: run.run_started_at,
+          };
+        }
+      } catch (err) {
+        logger.warn({ err }, '[MCP-GITHUB] Real HTTP getBuild failed, falling back to mock');
+      }
+    }
+    await this.ensureConnected();
     if (this.useMock) {
       logger.warn('[MCP-GITHUB] Connection failed, using MOCK fallback data');
       return MOCK_BUILDS[buildId] ?? { ...MOCK_BUILD_DEFAULT, buildId };
@@ -297,6 +359,23 @@ export class GitHubMCPConnector {
   }
 
   public async retryBuild(buildId: string): Promise<{ success: boolean; newBuildId: string }> {
+    if (this.useRealHttp) {
+      try {
+        const cleanId = buildId.replace(/^BUILD-/, '');
+        const res = await fetch(`https://api.github.com/repos/${this.ghRepo}/actions/runs/${cleanId}/rerun-failed-jobs`, {
+          method: 'POST',
+          headers: this.ghHeaders(),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.ok) {
+          logger.info(`[MCP-GITHUB] Real HTTP: successfully re-ran failed jobs for Action run #${cleanId}`);
+          return { success: true, newBuildId: `RUN-${cleanId}-retry` };
+        }
+      } catch (err) {
+        logger.warn({ err }, '[MCP-GITHUB] Real HTTP retryBuild failed');
+      }
+    }
+    await this.ensureConnected();
     if (this.useMock) {
       logger.warn('[MCP-GITHUB] Connection failed, using MOCK fallback data');
       return { success: true, newBuildId: `BUILD-retry-${Date.now()}` };

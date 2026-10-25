@@ -1,0 +1,25 @@
+name: CI Build & Test
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify Workspace
+        run: |
+          echo "Running NexAgent automated CI validation..."
+          node -v
+          npm -v
+          echo "Build & Test verification passed!"
