@@ -27,9 +27,13 @@ export default function TriagePage() {
   const [title, setTitle] = useState("VPN Access Password Reset Request");
   const [description, setDescription] = useState("User cannot access VPN after password expiry.");
   const { run, stop, streaming, steps, rawLog, result, error } = usePipeline();
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const terminalBodyRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [rawLog]);
+  useEffect(() => {
+    if (terminalBodyRef.current) {
+      terminalBodyRef.current.scrollTop = terminalBodyRef.current.scrollHeight;
+    }
+  }, [rawLog]);
 
   return (
     <AppShell>
@@ -230,7 +234,7 @@ export default function TriagePage() {
                 <div className="terminal-dot bg-emerald-400/80" />
                 <span className="text-[10px] text-violet-300/50 ml-2 font-mono">ticket-triage-sse</span>
               </div>
-              <div className="terminal-body h-36 overflow-y-auto space-y-0.5">
+              <div ref={terminalBodyRef} className="terminal-body h-36 overflow-y-auto space-y-0.5">
                 {rawLog.length === 0 ? (
                   <p className="text-violet-400/50">$ awaiting pipeline execution…</p>
                 ) : rawLog.map((line, i) => {
@@ -244,7 +248,6 @@ export default function TriagePage() {
                     {line}
                   </div>;
                 })}
-                <div ref={logEndRef} />
               </div>
             </div>
           </CardContent>

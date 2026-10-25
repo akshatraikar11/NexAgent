@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { api, setToken, clearToken } from "./api";
+import { api, setToken, clearToken, getToken } from "./api";
 
 interface User {
   id: string;
@@ -27,18 +27,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check session via httpOnly cookie on mount
-    api.auth
-      .me()
-      .then((u) => {
-        setUser(u);
-      })
-      .catch(() => {
+    const saved = getToken();
+    if (saved) {
+      setTokenState(saved);
+      api.auth
+        .me()
+        .then((u) => setUser(u))
+        .catch(() => autoLoginAdmin())
+        .finally(() => setLoading(false));
+    } else {
+      autoLoginAdmin();
+    }
+
+    async function autoLoginAdmin() {
+      try {
+        const res = await api.auth.login("admin@nexagent.dev", "NexAgent_Dev_2026!");
+        setToken(res.token);
+        setTokenState(res.token);
+        setUser(res.user);
+      } catch {
         clearToken();
         setTokenState(null);
         setUser(null);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    }
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

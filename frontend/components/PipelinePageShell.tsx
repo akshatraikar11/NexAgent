@@ -42,10 +42,12 @@ interface Props {
 
 export function PipelinePageShell({ title, icon, description, controls, buildPayload, decisionLabel }: Props) {
   const { run, stop, streaming, steps, rawLog, result, error } = usePipeline();
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const terminalBodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (terminalBodyRef.current) {
+      terminalBodyRef.current.scrollTop = terminalBodyRef.current.scrollHeight;
+    }
   }, [rawLog]);
 
   const labelFor = (d: string) => decisionLabel ? decisionLabel(d) : d;
@@ -220,7 +222,7 @@ export function PipelinePageShell({ title, icon, description, controls, buildPay
               <div className="terminal-dot bg-emerald-400/80" />
               <span className="text-[10px] text-violet-300/50 ml-2 font-mono">nexagent-sse</span>
             </div>
-            <div className="terminal-body h-36 overflow-y-auto space-y-0.5">
+            <div ref={terminalBodyRef} className="terminal-body h-36 overflow-y-auto space-y-0.5">
               {rawLog.length === 0 ? (
                 <p className="text-violet-400/50">$ awaiting pipeline execution…</p>
               ) : (
@@ -236,7 +238,6 @@ export function PipelinePageShell({ title, icon, description, controls, buildPay
                   </div>;
                 })
               )}
-              <div ref={logEndRef} />
             </div>
           </div>
         </CardContent>

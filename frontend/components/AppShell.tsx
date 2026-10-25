@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
@@ -10,6 +11,11 @@ import { Menu } from "lucide-react";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [pathname]);
 
   if (loading) {
     return (

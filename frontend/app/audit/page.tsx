@@ -20,12 +20,13 @@ export default function AuditPage() {
 
   useEffect(() => {
     api.audit.list()
-      .then(setLogs)
+      .then((data) => setLogs(Array.isArray(data) ? data : []))
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = logs.filter((l) => {
+  const safeLogs = Array.isArray(logs) ? logs : [];
+  const filtered = safeLogs.filter((l) => {
     const matchEntity = entityFilter === "All" || l.entityType === entityFilter;
     const matchSearch = !search ||
       l.action.toLowerCase().includes(search.toLowerCase()) ||

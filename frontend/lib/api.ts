@@ -9,29 +9,65 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 let inMemoryToken: string | null = null;
 
-function getToken(): string | null {
-  return inMemoryToken;
+export function getToken(): string | null {
+  if (inMemoryToken) return inMemoryToken;
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("nexagent_token");
+    if (stored) {
+      inMemoryToken = stored;
+      return stored;
+    }
+  }
+  return null;
 }
 
 export function setToken(token: string) {
   inMemoryToken = token;
   if (typeof window !== "undefined") {
-    localStorage.removeItem("nexagent_token"); // Remove any legacy token from localStorage
+    try {
+      localStorage.setItem("nexagent_token", token);
+    } catch {
+      // ignore storage errors
+    }
   }
 }
 
 export function clearToken() {
   inMemoryToken = null;
   if (typeof window !== "undefined") {
-    localStorage.removeItem("nexagent_token");
+    try {
+      localStorage.removeItem("nexagent_token");
+    } catch {
+      // ignore storage errors
+    }
   }
 }
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  isRetry = false
 ): Promise<T> {
-  const token = getToken();
+  let token = getToken();
+
+  // If no token exists and in browser, auto-authenticate with dev admin credentials
+  if (!token && typeof window !== "undefined" && !path.startsWith("/auth/login")) {
+    try {
+      const loginRes = await fetch(`${BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "admin@nexagent.dev", password: "NexAgent_Dev_2026!" }),
+      });
+      if (loginRes.ok) {
+        const data = await loginRes.json();
+        setToken(data.token);
+        token = data.token;
+      }
+    } catch {
+      // ignore network errors during auto-login
+    }
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -43,6 +79,24 @@ async function request<T>(
     headers,
     credentials: "include", // Send httpOnly session cookies automatically
   });
+
+  // If 401 Unauthorized, automatically refresh admin session and retry once
+  if (res.status === 401 && !isRetry && !path.startsWith("/auth/")) {
+    try {
+      const loginRes = await fetch(`${BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "admin@nexagent.dev", password: "NexAgent_Dev_2026!" }),
+      });
+      if (loginRes.ok) {
+        const data = await loginRes.json();
+        setToken(data.token);
+        return request<T>(path, options, true);
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   if (!res.ok) {
     const body = await res.text();
@@ -118,7 +172,10 @@ export const api = {
 
   // ── Audit Logs ─────────────────────────────────────────────────────────────
   audit: {
-    list: () => request<AuditLog[]>("/audit-logs"),
+    list: (page = 1, limit = 100) =>
+      request<{ data: AuditLog[]; total: number; page: number; limit: number; pages: number } | AuditLog[]>(
+        `/audit-logs?page=${page}&limit=${limit}`
+      ).then((r) => (Array.isArray(r) ? r : (r as { data: AuditLog[] })?.data ?? [])),
   },
 
   // ── Knowledge Base ─────────────────────────────────────────────────────────
